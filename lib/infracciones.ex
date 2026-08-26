@@ -22,8 +22,12 @@ defmodule Libremarket.Infracciones.Server do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def detectar_infraccion(pid \\ __MODULE__, id_compra) do
-    GenServer.call(pid, {:detectar_infraccion, id_compra})
+  def detectar_infraccion(compra_id) do
+    GenServer.call(__MODULE__, {:detectar_infraccion, compra_id})
+  end
+
+  def detectar_infraccion(pid, compra_id) do
+    GenServer.call(pid, {:detectar_infraccion, compra_id})
   end
 
   def listar_infracciones(pid \\ __MODULE__) do
@@ -44,9 +48,9 @@ defmodule Libremarket.Infracciones.Server do
   Callback para un call :comprar
   """
   @impl true
-  def handle_call({:detectar_infraccion, id_compra}, _from, state) do
-    result = Libremarket.Infracciones.detectar_infraccion
-    new_state = Map.put(state, id_compra, result)
+  def handle_call({:detectar_infraccion, compra_id}, _from, state) do
+    result = Libremarket.Infracciones.detectar_infraccion()
+    new_state = Map.put(state, compra_id, result)
     {:reply, result, new_state}
   end
 
