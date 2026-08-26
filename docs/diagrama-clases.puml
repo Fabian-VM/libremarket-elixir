@@ -1,0 +1,38 @@
+@startuml Libremarket
+
+class Compra {
+    + Integer id
+    + String producto
+    + Integer costo_producto
+    + Integer costo_envio
+    + Atom medio_pago
+    + Atom forma_entrega
+}
+
+class Ui {
+    - state
+    + comprar()
+}
+
+class Compras {
+    - state
+    + seleccionar_producto()
+    + seleccionar_forma_entrega()
+    + seleccionar_medio_pago()
+    + confirmar_compra()
+    + informar_infraccion()
+}
+
+class Infracciones {
+    - state
+    + detectar_infraccion()
+}
+
+
+class Pagos {
+    - state
+    + autorizar_pago()
+}
+
+
+@enduml

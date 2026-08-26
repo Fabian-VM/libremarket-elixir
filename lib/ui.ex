@@ -5,4 +5,3 @@ defmodule Libremarket.Ui do
   end
 
 end
-
