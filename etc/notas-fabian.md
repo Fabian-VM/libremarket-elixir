@@ -17,15 +17,12 @@ Ui.comprar(producto, medio_pago, forma_entrega):
 ```php
 function Compras.seleccionar_producto({...}):
     Ventas.reservar_producto({...}) 
-    const [{...}, hay_infraccion] = Task.await_many([
-        Task.async(Compras.seleccionar_forma_entrega({...})),
-        Task.async(Compras.detectar_infracciones({...}))
-    ])
-
+    Compras.seleccionar_forma_entrega({...})
+    Compras.detectar_infracciones({...}
     if (hay_infraccion):
-        Pagos.autorizar_pago({...})
+        Compras.informar_infraccion()
     else:
-        return Compras.informar_infraccion()
+        Pagos.autorizar_pago({...})
 
 function Compras.seleccionar_forma_entrega({...}):
     if forma_entrega == correo:
@@ -57,11 +54,7 @@ function Envios.calcular_costo({...}):
 **Pagos**
 ```php
 function Pagos.autorizar_pago({...}):
-    const [ ] = Task.await_many([
-        Task.async(Compras.seleccionar_forma_entrega({...})),
-        Task.async(Compras.detectar_infracciones({...}))
-    ])
-
+    ...
 
 ```
 
