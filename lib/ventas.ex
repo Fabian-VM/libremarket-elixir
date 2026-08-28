@@ -1,20 +1,20 @@
 defmodule Libremarket.Ventas do
 
-  def hay_stock_suficiente(stock_productos, producto_id) do
+  def hay_stock_suficiente(stock_productos, compras_id, producto_id) do
     stock = Map.get(stock_productos, producto_id)
     stock_suficiente = stock - 1 >= 0
     if (stock_suficiente) do
-      IO.puts("[VENTAS]\t| Producto ##{producto_id}: #{stock} unidades disponibles")
+      IO.puts("[VENTAS]\t| Compra N° #{compras_id}: es posible reservar una unidad del producto ##{producto_id} (#{stock} unidades disponibles)")
     else
-      IO.puts("[VENTAS]\t| Producto ##{producto_id}: insuficiente stock del producto ")
+      IO.puts("[VENTAS]\t| Compra N° #{compras_id}: insuficiente stock del producto ##{producto_id}")
     end
     stock_suficiente
   end
 
-  def reservar_producto(stock_productos, producto_id) do
+  def reservar_producto(stock_productos, compras_id, producto_id) do
 
     Map.update(stock_productos, producto_id, 0, fn stock ->
-      IO.puts("[VENTAS]\t| Producto ##{producto_id}: unidad reservada (#{stock - 1} unidades restantes)")
+      IO.puts("[VENTAS]\t| Compra N° #{compras_id}: unidad reservada del producto ##{producto_id} (#{stock - 1} unidades restantes)")
       stock - 1
     end)
 
@@ -38,12 +38,12 @@ defmodule Libremarket.Ventas.Server do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def reservar_producto(producto_id) do
-    GenServer.call(__MODULE__, {:reservar_producto, producto_id})
+  def reservar_producto(compras_id, producto_id) do
+    GenServer.call(__MODULE__, {:reservar_producto, compras_id, producto_id})
   end
 
-  def reservar_producto(pid, producto_id) do
-    GenServer.call(pid, {:reservar_producto, producto_id})
+  def reservar_producto(pid, compras_id, producto_id) do
+    GenServer.call(pid, {:reservar_producto, compras_id, producto_id})
   end
 
   # Callbacks
@@ -74,9 +74,9 @@ defmodule Libremarket.Ventas.Server do
   Callback para un call :comprar
   """
   @impl true
-  def handle_call({:reservar_producto, producto_id}, _from, state) do
-    if (Libremarket.Ventas.hay_stock_suficiente(state, producto_id)) do
-      stock_productos_actualizados = Libremarket.Ventas.reservar_producto(state, producto_id)
+  def handle_call({:reservar_producto, compras_id, producto_id}, _from, state) do
+    if (Libremarket.Ventas.hay_stock_suficiente(state, compras_id, producto_id)) do
+      stock_productos_actualizados = Libremarket.Ventas.reservar_producto(state, compras_id, producto_id)
       {:reply, :true, stock_productos_actualizados}
     else
       {:reply, :false, state}

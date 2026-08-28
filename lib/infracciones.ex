@@ -1,7 +1,7 @@
 defmodule Libremarket.Infracciones do
 
   def detectar_infraccion() do
-    Enum.random([:true, :false])
+    Enum.random(1..100) <= 30
   end
 
 end
