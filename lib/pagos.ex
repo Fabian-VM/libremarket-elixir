@@ -1,12 +1,9 @@
 defmodule Libremarket.Pagos do
 
-  def autorizar_pago() do
-    if (Enum.random(1..100) <= 70) do
-      :pago_autorizado
-    else
-      :pago_rechazado
-    end
-
+  def autorizar_pago(compra_id) do
+    pago_autorizado = Enum.random(1..100) <= 70
+    IO.puts("[PAGOS]\t\t| Compra N° #{compra_id}: pago #{if pago_autorizado, do: "autorizado", else: "no autorizado"}")
+    pago_autorizado
   end
 
 end
@@ -27,8 +24,8 @@ defmodule Libremarket.Pagos.Server do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def autorizar_pago(pid \\ __MODULE__) do
-    GenServer.call(pid, :autorizar_pago)
+  def autorizar_pago(pid \\ __MODULE__, compra_id) do
+    GenServer.call(pid, {:autorizar_pago, compra_id})
   end
 
   # Callbacks
@@ -41,12 +38,9 @@ defmodule Libremarket.Pagos.Server do
     {:ok, state}
   end
 
-  @doc """
-  Callback para un call :autorizar_pago
-  """
   @impl true
-  def handle_call(:autorizar_pago, _from, state) do
-    result = Libremarket.Pagos.autorizar_pago()
+  def handle_call({:autorizar_pago, compra_id}, _from, state) do
+    result = Libremarket.Pagos.autorizar_pago(compra_id)
     {:reply, result, state}
   end
 
