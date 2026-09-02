@@ -1,9 +1,10 @@
 defmodule Simulador do
 
   def simular_compra() do
-    forma_entrega = Enum.random([:retira, :correo])
+    forma_entrega = if Enum.random(1..100) <= 70, do: :correo, else: :retira
     medio_pago = Enum.random([:efectivo, :transferencia, :td, :tc])
-    Libremarket.Ui.comprar(:rand.uniform(10), forma_entrega, medio_pago)
+    confirma_compra? = Enum.random(1..100) <= 80
+    Libremarket.Ui.comprar(:rand.uniform(10), forma_entrega, medio_pago, confirma_compra?)
   end
 
   def simular_compras_secuencial(cantidad \\ 1) do

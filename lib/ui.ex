@@ -12,7 +12,7 @@ defmodule Libremarket.Ui do
   #    No solo se guardo en una variable, porque cuando este flujo sea por paso de mensajes,
   #    cada modulo deberá guardar cada resultado que obtenga. Por eso se implementa ahora.
 
-  def comprar(producto_id, forma_entrega, medio_pago) do
+  def comprar(producto_id, forma_entrega, medio_pago, confirma_compra) do
     compra_id = Libremarket.Compras.Server.seleccionar_producto(producto_id)
 
     Libremarket.Compras.Server.seleccionar_forma_entrega(compra_id, forma_entrega)
@@ -30,7 +30,10 @@ defmodule Libremarket.Ui do
 
     Libremarket.Compras.Server.seleccionar_medio_pago(compra_id, medio_pago)
 
-    Libremarket.Compras.Server.confirmar_compra(compra_id)
+    if confirma_compra do
+      Libremarket.Compras.Server.confirmar_compra(compra_id)
+    end
+
 
     # Agregar caso de stock insuficiente
     if (infraccion_detectada) do
