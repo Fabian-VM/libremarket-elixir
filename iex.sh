@@ -4,4 +4,4 @@
 # so that the created files have proper permissions
 SNAME="${1:-n1}"
 COOKIE="${2:-secret}"
-docker run -it --rm -v "$(pwd)":/app -w /app -u $(id -u):$(id -g) -e MIX_HOME=/app/mix_home -e HEX_HOME=/app/hex_home elixir:alpine iex --sname $SNAME --cookie $COOKIE -S mix
+docker run -it --rm --userns=host --network host -v "$(pwd)":/app -w /app -u $(id -u):$(id -g) -e MIX_HOME=/app/mix_home -e HEX_HOME=/app/hex_home elixir:1.19-alpine iex --name ${SNAME}@127.0.0.1 --cookie $COOKIE -S mix
