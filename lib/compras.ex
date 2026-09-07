@@ -51,6 +51,10 @@ defmodule Libremarket.Compras do
     %{ compra | pago_autorizado: pago_autorizado }
   end
 
+  def informar_stock_insuficiente(compra_id) do
+    IO.puts("[COMPRAS]\t| Compra N° #{compra_id}: cancelada por stock insuficiente")
+  end
+
   def informar_infraccion(compra_id) do
     IO.puts("[COMPRAS]\t| Compra N° #{compra_id}: cancelada por infracción")
   end
@@ -111,6 +115,10 @@ defmodule Libremarket.Compras.Server do
 
   def registrar_pago_autorizado(server \\ __MODULE__, compra_id, pago_autorizado) do
     GenServer.call(server, {:registar_pago_autorizado, compra_id, pago_autorizado})
+  end
+
+  def informar_stock_insuficiente(server \\ __MODULE__, compra_id) do
+    GenServer.call(server, {:informar_stock_insuficiente, compra_id})
   end
 
   def informar_infraccion(server \\ __MODULE__, compra_id) do
@@ -226,6 +234,12 @@ defmodule Libremarket.Compras.Server do
     compra_actualizada = Libremarket.Compras.registrar_pago_autorizado(compra, pago_autorizado)
     new_state = Libremarket.Compras.Server.update_compra(state, compra_actualizada)
     {:reply, :ok, new_state}
+  end
+
+  @impl true
+  def handle_call({:informar_stock_insuficiente, compra_id}, _from, state) do
+    Libremarket.Compras.informar_stock_insuficiente(compra_id)
+    {:reply, :ok, state}
   end
 
   @impl true
