@@ -1,0 +1,99 @@
+# Untitled notebook
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.3"},
+  {:vega_lite, "~> 0.1.11"}
+])
+
+```
+
+## Section
+
+```elixir
+# Simular 30 compras de manera asíncrona (concurrente)
+Simulador.simular_compras_async(30)
+
+```
+
+```elixir
+# 1. Obtener todas las compras registradas
+compras = Libremarket.Compras.Server.listar_compras()
+
+# 2. Clasificar cada compra según su resultado
+compras_procesadas = Enum.map(compras, fn c ->
+  motivo = cond do
+    c.infraccion_detectada == true -> "Rechazada (Infracción)"
+    c.producto_esta_reservado == false -> "Rechazada (Sin Stock)"
+    c.pago_autorizado == false -> "Rechazada (Pago Rechazado)"
+    c.pago_autorizado == true -> "Exitosa"
+    true -> "Pendiente/En Proceso"
+  end
+
+  Map.put(c, :motivo_resultado, motivo)
+end)
+
+# 3. Filtrar solo las compras rechazadas
+rechazadas = Enum.filter(compras_procesadas, fn c ->
+  String.starts_with?(c.motivo_resultado, "Rechazada")
+end)
+
+# 4. Calcular métricas
+total_compras = Enum.count(compras_procesadas)
+total_rechazadas = Enum.count(rechazadas)
+total_exitosas = total_compras - total_rechazadas
+
+tasa_rechazo = if total_compras > 0, do: Float.round((total_rechazadas / total_compras) * 100, 2), else: 0.0
+
+# 5. Imprimir resumen
+IO.puts("📊 =====================================")
+IO.puts("        ESTADÍSTICAS DE COMPRAS        ")
+IO.puts("📊 =====================================")
+IO.puts("• Total compras procesadas:  #{total_compras}")
+IO.puts("• Compras exitosas:          #{total_exitosas}")
+IO.puts("• Compras rechazadas:        #{total_rechazadas}")
+IO.puts("• Tasa de rechazo general:   #{tasa_rechazo}%")
+
+```
+
+```elixir
+Kino.DataTable.new(rechazadas, 
+  keys: [:compra_id, :producto_id, :forma_entrega, :medio_pago, :motivo_resultado],
+  name: "Compras Rechazadas"
+)
+
+```
+
+```elixir
+alias VegaLite, as: Vl
+
+conteo_motivos = 
+  compras_procesadas
+  |> Enum.group_by(& &1.motivo_resultado)
+  |> Enum.map(fn {motivo, lista} -> 
+       %{"Resultado" => motivo, "Cantidad" => Enum.count(lista)} 
+     end)
+
+Vl.new(title: "Distribución de Resultados de Compras", width: 500, height: 300)
+|> Vl.data_from_values(conteo_motivos)
+|> Vl.mark(:bar, tooltip: true)
+|> Vl.encode_field(:x, "Resultado", type: :nominal, title: "Resultado de la Operación")
+|> Vl.encode_field(:y, "Cantidad", type: :quantitative, title: "Cantidad de Operaciones")
+
+```
+
+```elixir
+rechazos_por_producto = 
+  rechazadas
+  |> Enum.group_by(& &1.producto_id)
+  |> Enum.map(fn {prod_id, lista} ->
+       %{"Producto" => "Producto ##{prod_id}", "Rechazos" => Enum.count(lista)}
+     end)
+
+Vl.new(title: "Rechazos por Producto", width: 500, height: 300)
+|> Vl.data_from_values(rechazos_por_producto)
+|> Vl.mark(:bar, tooltip: true, color: "#e63946")
+|> Vl.encode_field(:x, "Producto", type: :nominal, title: "Producto")
+|> Vl.encode_field(:y, "Rechazos", type: :quantitative, title: "Cantidad de Rechazos")
+
+```
