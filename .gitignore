@@ -25,6 +25,15 @@ libremarket-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+<<<<<<< HEAD
 # Docker Mix & Hex caches
 /mix_home/
 /hex_home/
+=======
+# Docker compose .env file
+.env
+
+**/mix_home/
+
+**/hex_home/
+>>>>>>> 6d8b761171ef18b3924e962a7f518945a636f725

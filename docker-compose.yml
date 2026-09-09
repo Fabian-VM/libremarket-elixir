@@ -1,35 +1,52 @@
 services:
   compras:
-    image: elixir:1.19-alpine
+    image: elixir:otp-27-alpine
     container_name: compras
     volumes:
       - ./:/app
     working_dir: /app
-    network_mode: "host"
     environment:
       SERVER_TO_RUN: Libremarket.Compras.Server
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
-    command: iex --name compras@127.0.0.1 --cookie secret -S mix
+      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
+    command: iex --sname compras --cookie secret -S mix
     # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
   infracciones:
-    image: elixir:1.19-alpine
+    image: elixir:otp-27-alpine
     container_name: infracciones
     volumes:
       - ./:/app
     working_dir: /app
-    network_mode: "host"
     environment:
       SERVER_TO_RUN: Libremarket.Infracciones.Server
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
-    command: iex --name infracciones@127.0.0.1 --cookie secret -S mix
+      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
+    command: iex --sname infracciones --cookie secret -S mix
     # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
+  pagos:
+    image: elixir:otp-27-alpine
+    container_name: pagos
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      SERVER_TO_RUN: Libremarket.Pagos.Server
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
+    command: iex --sname pagos --cookie secret -S mix
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+    

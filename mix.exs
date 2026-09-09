@@ -24,7 +24,10 @@ defmodule Libremarket.MixProject do
     [
       {:kino, "~> 0.12.3"},
       {:vega_lite, "~> 0.1.11"},
-      {:kino_vega_lite, "~> 0.1.10"}
+      {:kino_vega_lite, "~> 0.1.10"},
+      # {:dep_from_hexpm, "~> 0.3.0"},
+      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:amqp, "~> 4.0"}
     ]
   end
 end
