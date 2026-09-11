@@ -1,38 +1,111 @@
 @startuml Libremarket
 
-class Compra {
-    + Integer id
-    + String producto
-    + Integer costo_producto
-    + Integer costo_envio
-    + Atom medio_pago
-    + Atom forma_entrega
+left to right direction
+
+' --------------------------------
+
+class Compras <<module>> {
+    + Compra seleccionar_producto(compra_id, producto_id)
+    + Compra seleccionar_forma_entrega(compra, forma_entrega)
+    + Compra seleccionar_medio_pago(compra, medio_pago)
+    + Compra confirmar_compra(compra)
+    + Compra registrar_infraccion_detectada(compra, infraccion_detectada)
+    + Compra registrar_producto_reservado(compra, producto_esta_reservado)
+    + Compra registrar_costo_envio(compra, costo_envio) 
+    + Compra registrar_pago_autorizado(compra, pago_autorizado) 
+    + atom informar_infraccion(compra_id)
+    + atom informar_pago_rechazado(compra_id)
+    + atom finalizar_compra(compra_id) 
 }
 
-class Ui {
-    - state
-    + comprar()
+struct EstadoCompras {
+    + integer secuencia_id
 }
 
-class Compras {
-    - state
-    + seleccionar_producto()
-    + seleccionar_forma_entrega()
-    + seleccionar_medio_pago()
-    + confirmar_compra()
-    + informar_infraccion()
-}
-
-class Infracciones {
-    - state
-    + detectar_infraccion()
+struct Compra {
+    integer compra_id
+    integer producto_id
+    integer costo_envio
+    atom forma_entrega
+    atom medio_pago
+    atom confirmada_por_usuario
+    atom infraccion_detectada
+    atom producto_esta_reservado
+    atom pago_autorizado
 }
 
 
-class Pagos {
-    - state
-    + autorizar_pago()
+Compras "1" --> "1" EstadoCompras : - EstadoCompras state
+
+EstadoCompras "1" --> "*" Compra : + list compras 
+
+
+' --------------------------------
+
+class Infracciones <<module>> {
+    - EstadoInfracciones state
+    + Compra detectar_infraccion()
 }
+
+
+struct EstadoInfracciones {
+
+}
+
+struct Infraccion {
+    integer compra_id
+    atom infraccion_detectada
+}
+
+Infracciones "1" --> "1" EstadoInfracciones : - EstadoInfracciones state
+
+EstadoInfracciones "1" --> "*" Infraccion : + list infracciones 
+
+
+' --------------------------------
+
+class Ventas <<module>> {
+    + atom stock_suficiente(productos, compra_id, producto_id)
+    + atom enviar_producto(compra_id, producto_id)
+    + list reservar_producto(productos, compra_id, producto_id) 
+    + list liberar_producto(productos, compra_id, producto_id)
+}
+
+
+struct EstadoVentas {
+
+}
+
+struct Producto {
+    integer id
+    integer stock
+}
+
+Ventas "1" --> "1" EstadoVentas : - EstadoVentas state
+
+EstadoVentas "1" --> "*" Producto : + list productos 
+
+
+' --------------------------------
+
+class Envios <<module>> {
+    + integer calcular_costo(compra_id, forma_entrega)
+    + Date agendar_envio(compra_id)
+}
+
+' --------------------------------
+
+class Pagos <<module>> {
+    + atom autorizar_pago()
+}
+
+' --------------------------------
+
+class Ui <<module>> {
+    + atom comprar()
+}
+
+' --------------------------------
 
 
 @enduml
