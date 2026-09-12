@@ -12,9 +12,9 @@ defmodule Producer do
     Queue.declare(channel, queue_name, durable: true)
 
     # Publicar el mensaje
-    Basic.publish(channel, "", queue_name, message)
+    Basic.publish(channel, "", queue_name, :erlang.term_to_binary(message))
 
-    IO.puts("Mensaje enviado: #{message}")
+    IO.puts("Mensaje enviado")
   end
 
 end
