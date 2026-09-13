@@ -24,3 +24,8 @@ libremarket-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Local Mix and Hex environments
+/mix_home/
+/hex_home/
+
