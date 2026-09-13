@@ -14,7 +14,7 @@ defmodule Producer do
     # Publicar el mensaje
     Basic.publish(channel, "", queue_name, :erlang.term_to_binary(message))
 
-    IO.puts("Mensaje enviado")
+    IO.puts("\t('#{queue_name}'\t<-- #{inspect(message)})")
   end
 
 end

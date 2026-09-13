@@ -1,67 +1,155 @@
 defmodule Libremarket.Ui do
+  @moduledoc """
+  Módulo de lógica de la interfaz
+  """
 
-  # Notas (fabian):
-  # 1. Esta seria la implementación del flujo principal indicado en el diagrama de actividades
-  # 2. Está implementado en Ui y no en Compras porque si se implementa allí, habrán llamadas que serán locales,
-  #    pero las demás a los GenServer de los demas, y eso dispersaría la implementación y sería más dificil
-  #    verificarlo respecto al diagrama. En cambio de esta forma, con solo mirar esta función podemos tenerlo claro
-  # 3. En el siguiente incremento se separarán los módulos cada vez mas para asemejarse a un sistema distribuido,
-  #    pero ahora mismo lo que se busca es primero implementar la logica de negocio de forma secuencial
-  # 4. El modulo de Compras es el que va pidiendo que los demás procesen cosas
-  # 5. Cada resultado de Compras pide a otro modulo ajeno lo guardaen su estado.
-  #    No solo se guardo en una variable, porque cuando este flujo sea por paso de mensajes,
-  #    cada modulo deberá guardar cada resultado que obtenga. Por eso se implementa ahora.
+  def crear_solicitud(compra_id, producto_id, forma_entrega, medio_pago, confirma_compra) do
+    IO.puts("Compra N° #{compra_id}: solicitud de compra creada")
+    %{
+      compra_id: compra_id,
+      producto_id: producto_id,
+      forma_entrega: forma_entrega,
+      medio_pago: medio_pago,
+      confirma_compra: confirma_compra
+    }
+  end
 
-  def comprar(_producto_id, _forma_entrega, _medio_pago, _confirma_compra) do
-    # compra_id = Libremarket.Compras.Server.seleccionar_producto(producto_id)
+  def informar_stock_insuficiente(compra_id) do
+    IO.puts("Compra N° #{compra_id}: se ha cancelado su compra, debido a que el stock es insuficiente")
+  end
 
-    # Libremarket.Compras.Server.seleccionar_forma_entrega(compra_id, forma_entrega)
+  def informar_infraccion(compra_id) do
+    IO.puts("Compra N° #{compra_id}: se ha cancelado su compra, debido a que se ha detectado una infracción")
+  end
 
-    # infraccion_detectada = Libremarket.Infracciones.Server.detectar_infraccion(compra_id)
-    # Libremarket.Compras.Server.registrar_infraccion_detectada(compra_id, infraccion_detectada)
+  def informar_pago_rechazado(compra_id) do
+    IO.puts("Compra N° #{compra_id}: se ha cancelado su compra, debido a que se ha rechazado el pago")
+  end
 
-    # producto_esta_reservado = Libremarket.Ventas.Server.reservar_producto(compra_id, producto_id)
-    # Libremarket.Compras.Server.registrar_producto_reservado(compra_id, producto_esta_reservado)
+  def informar_compra_finalizada(compra_id) do
+    IO.puts("Compra N° #{compra_id}: se ha finalizado su compra con éxito. Hasta nunca!")
+  end
 
-    # if forma_entrega != :retira do
-    #   costo_envio = Libremarket.Envios.Server.calcular_costo(compra_id, forma_entrega)
-    #   Libremarket.Compras.Server.registrar_costo_envio(compra_id, costo_envio)
-    # end
+  # Encontrar una solicitud en una lista de solicitudes
+  def find_solicitud_by_id(solicitudes, compra_id) do
+    Enum.find(solicitudes, fn item -> item.compra_id == compra_id end)
+  end
 
-    # Libremarket.Compras.Server.seleccionar_medio_pago(compra_id, medio_pago)
-
-    # if confirma_compra do
-    #   Libremarket.Compras.Server.confirmar_compra(compra_id)
-    # end
+end
 
 
-    # Agregar caso de stock insuficiente
-    # if (not producto_esta_reservado) do
-    #   Libremarket.Compras.Server.informar_stock_insuficiente(compra_id)
-    #   :not_ok
-    # else
-    #   if (infraccion_detectada) do
-    #     Libremarket.Compras.Server.informar_infraccion(compra_id)
-    #     Libremarket.Ventas.Server.liberar_producto(compra_id, producto_id)
-    #     :not_ok
-    #   else
-    #     # Autorizar pago
-    #     pago_autorizado = Libremarket.Pagos.Server.autorizar_pago(compra_id)
-    #     Libremarket.Compras.Server.registrar_pago_autorizado(compra_id, pago_autorizado)
-    #     if (not pago_autorizado) do
-    #       Libremarket.Compras.Server.informar_pago_rechazado(compra_id)
-    #       Libremarket.Ventas.Server.liberar_producto(compra_id, producto_id)
-    #       :not_ok
-    #     else
-    #       if (forma_entrega == :correo) do
-    #         Libremarket.Envios.Server.agendar_envio(compra_id)
-    #         Libremarket.Ventas.Server.enviar_producto(compra_id, producto_id)
-    #       end
-    #       Libremarket.Compras.Server.finalizar_compra(compra_id)
-    #       :ok
-    #     end
-    #   end
-    # end
+
+defmodule Libremarket.Ui.Server do
+  @moduledoc """
+  Módulo del servidor de interfaz (API de uso público)
+  """
+
+  use GenServer
+  use AMQP
+
+  @ui_queue_name "ui"
+  @compras_queue_name "compras"
+
+
+  # FUNCIONES PÚBLICAS
+  # -------------------------------------
+
+  def start_link(opts \\ %{}) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+
+  # HANDLERS
+  # -------------------------------------
+
+  # state {
+  #   amqp_channel: {...}
+  #   secuencia_id: numero
+  #   solicitudes: Solicitud[]
+  # }
+  @impl true
+  def init(_state) do
+    {:ok, amqp_channel} = AMQP.Application.get_channel(:channel)
+    Queue.declare(amqp_channel, @ui_queue_name, durable: true)
+    Basic.consume(amqp_channel, @ui_queue_name, nil, no_ack: true)
+
+    initial_state = %{
+      amqp_channel: amqp_channel,
+      secuencia_id: 0,
+      solicitudes: []
+    }
+
+    {:ok, initial_state}
+  end
+
+  # Necesario para recibir una confirmación del broker al registrarse como consumidor
+  # (Si no está este handler, va a suceder un error de invocación a una función que no existe)
+  @impl true
+  def handle_info({:basic_consume_ok, %{consumer_tag: _consumer_tag}}, state) do
+    {:noreply, state}
+  end
+
+  # Recepción de mensajes
+  @impl true
+  def handle_info({:basic_deliver, payload, _meta}, state) do
+    case :erlang.binary_to_term(payload) do
+      {:simular_compra, producto_id, forma_entrega, medio_pago, confirma_compra} ->
+        compra_id = state.secuencia_id + 1
+        IO.puts("Un usuario inicia la compra N° #{compra_id}")
+        solicitud = Libremarket.Ui.crear_solicitud(compra_id, producto_id, forma_entrega, medio_pago, confirma_compra)
+        new_state = %{ state | secuencia_id: compra_id, solicitudes: [ solicitud | state.solicitudes ]}
+        Producer.send_message(@compras_queue_name, {:seleccionar_producto, compra_id, producto_id})
+        {:noreply, new_state}
+
+      {:seleccionar_forma_entrega, compra_id} ->
+        solicitud = Libremarket.Ui.find_solicitud_by_id(state.solicitudes, compra_id)
+        Producer.send_message(
+          @compras_queue_name,
+          {:seleccionar_forma_entrega, compra_id, solicitud.forma_entrega}
+        )
+        {:noreply, state}
+
+      {:seleccionar_medio_pago, compra_id} ->
+        solicitud = Libremarket.Ui.find_solicitud_by_id(state.solicitudes, compra_id)
+        Producer.send_message(
+          @compras_queue_name,
+          {:seleccionar_medio_pago, compra_id, solicitud.medio_pago}
+        )
+        {:noreply, state}
+
+      {:confirmar_compra, compra_id} ->
+        solicitud = Libremarket.Ui.find_solicitud_by_id(state.solicitudes, compra_id)
+        Producer.send_message(
+          @compras_queue_name,
+          {:confirmar_compra, compra_id, solicitud.confirma_compra}
+        )
+        {:noreply, state}
+
+      {:informar_stock_insuficiente, compra_id} ->
+        Libremarket.Ui.informar_stock_insuficiente(compra_id)
+        {:noreply, state}
+
+      {:informar_infraccion, compra_id} ->
+        Libremarket.Ui.informar_infraccion(compra_id)
+        {:noreply, state}
+
+      {:informar_pago_rechazado, compra_id} ->
+        Libremarket.Ui.informar_pago_rechazado(compra_id)
+        {:noreply, state}
+
+      {:informar_compra_finalizada, compra_id} ->
+        Libremarket.Ui.informar_compra_finalizada(compra_id)
+        {:noreply, state}
+
+      {:show_state} ->
+        IO.inspect(state)
+        {:noreply, state}
+
+      bad_payload ->
+        IO.puts("ADVERTENCIA: el payload no coincidió con ningun patrón -> #{inspect(bad_payload)}")
+        {:noreply, state}
+    end
+
   end
 
 end

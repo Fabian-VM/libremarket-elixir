@@ -10,7 +10,7 @@ defmodule Libremarket.Supervisor do
 
   defp children() do
     case System.get_env("SERVER_TO_RUN") do
-      nil -> [{Libremarket.Compras.Server, %{}}, {Libremarket.Infracciones.Server, %{}}]
+      nil -> []
       server_to_run -> [ {String.to_existing_atom("Elixir." <> server_to_run), %{}} ]
     end
   end

@@ -1,4 +1,37 @@
 services:
+  simulador:
+    image: elixir:otp-27-alpine
+    container_name: simulador
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
+    command: iex --sname simulador --cookie secret -S mix
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  ui:
+    image: elixir:otp-27-alpine
+    container_name: ui
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      SERVER_TO_RUN: Libremarket.Ui.Server
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
+    command: iex --sname ui --cookie secret -S mix
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
   compras:
     image: elixir:otp-27-alpine
     container_name: compras
@@ -33,6 +66,40 @@ services:
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
 
+  ventas:
+    image: elixir:otp-27-alpine
+    container_name: ventas
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      SERVER_TO_RUN: Libremarket.Ventas.Server
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
+    command: iex --sname ventas --cookie secret -S mix
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
+  envios:
+    image: elixir:otp-27-alpine
+    container_name: envios
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      SERVER_TO_RUN: Libremarket.Envios.Server
+      MIX_HOME: /app/mix_home
+      HEX_HOME: /app/hex_home
+      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
+    command: iex --sname envios --cookie secret -S mix
+    # para habilitar -it
+    stdin_open: true
+    tty: true
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+
   pagos:
     image: elixir:otp-27-alpine
     container_name: pagos
@@ -49,4 +116,3 @@ services:
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
-    
