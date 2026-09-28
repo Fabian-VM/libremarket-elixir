@@ -6,45 +6,11 @@ services:
       - ./:/app
     working_dir: /app
     environment:
+      SERVER_TO_RUN: simulador
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       CLOUDAMQP_URL: ${CLOUDAMQP_URL}
     command: iex --sname simulador --cookie secret -S mix
-    # para habilitar -it
-    stdin_open: true
-    tty: true
-    user: "${DOCKER_UID}:${DOCKER_GID}"
-
-  ui:
-    image: elixir:otp-27-alpine
-    container_name: ui
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      SERVER_TO_RUN: Libremarket.Ui.Server
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
-    command: iex --sname ui --cookie secret -S mix
-    # para habilitar -it
-    stdin_open: true
-    tty: true
-    user: "${DOCKER_UID}:${DOCKER_GID}"
-
-  compras:
-    image: elixir:otp-27-alpine
-    container_name: compras
-    volumes:
-      - ./:/app
-    working_dir: /app
-    environment:
-      SERVER_TO_RUN: Libremarket.Compras.Server
-      MIX_HOME: /app/mix_home
-      HEX_HOME: /app/hex_home
-      CLOUDAMQP_URL: ${CLOUDAMQP_URL}
-    command: iex --sname compras --cookie secret -S mix
-    # para habilitar -it
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
