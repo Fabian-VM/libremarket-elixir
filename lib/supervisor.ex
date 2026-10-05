@@ -11,14 +11,6 @@ defmodule Libremarket.Supervisor do
   defp children() do
     case System.get_env("SERVER_TO_RUN") do
       nil -> []
-
-      # ui y compras comparten contenedor
-      "simulador" ->
-        [
-          Libremarket.Ui.Server,
-          Libremarket.Compras.Server
-        ]
-
       server_to_run -> [ {String.to_existing_atom("Elixir." <> server_to_run), %{}} ]
     end
   end

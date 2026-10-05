@@ -1,14 +1,19 @@
 defmodule Libremarket.Infracciones do
 
-  def detectar_infraccion() do
-    Enum.random(1..100) <= 30
-  end
+  # OPERACIONES DEL DIAGRAMA
+  # -------------------------------------
 
-  def registrar_infraccion(compra_id, infraccion_detectada) do
+  def detectar_infracciones(compra_id, infraccion_detectada) do
     IO.puts("Compra N° #{compra_id}: #{if infraccion_detectada, do: "se ha detectado una", else: "no se ha detectado ninguna"} infracción")
     %{ compra_id: compra_id, infraccion_detectada: infraccion_detectada }
   end
 
+  # UTILIDADES
+  # -------------------------------------
+
+  def verificar_infraccion() do
+    Enum.random(1..100) <= 30
+  end
 
   def find_by_compra_id(infracciones, compra_id) do
     Enum.find(infracciones, fn item -> item.compra_id == compra_id end)
@@ -70,8 +75,8 @@ defmodule Libremarket.Infracciones.Server do
   def handle_info({:basic_deliver, payload, _meta}, state) do
     case :erlang.binary_to_term(payload) do
       {:detectar_infracciones, compra_id} ->
-        estado_infraccion = Libremarket.Infracciones.detectar_infraccion()
-        infraccion = Libremarket.Infracciones.registrar_infraccion(compra_id, estado_infraccion)
+        estado_infraccion = Libremarket.Infracciones.verificar_infraccion()
+        infraccion = Libremarket.Infracciones.detectar_infracciones(compra_id, estado_infraccion)
         new_state = %{ state | infracciones: [ infraccion | state.infracciones ] }
         Producer.send_message(@compras_queue_name, {:informar_estado_infraccion, compra_id, estado_infraccion})
         Producer.send_message(@ventas_queue_name, {:informar_estado_infraccion, compra_id, estado_infraccion})

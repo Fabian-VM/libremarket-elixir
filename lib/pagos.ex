@@ -3,6 +3,9 @@ defmodule Libremarket.Pagos do
   Módulo de lógica de pagos
   """
 
+  # OPERACIONES DEL DIAGRAMA
+  # -------------------------------------
+
   def autorizar_pago(compra_id) do
     pago_autorizado = Enum.random(1..100) <= 70
     IO.puts("Compra N° #{compra_id}: pago #{if pago_autorizado, do: "autorizado", else: "no autorizado"}")

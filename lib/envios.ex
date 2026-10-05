@@ -3,6 +3,9 @@ defmodule Libremarket.Envios do
   Módulo de lógica de envios
   """
 
+  # OPERACIONES DEL DIAGRAMA
+  # -------------------------------------
+
   def calcular_costo(compra_id, forma_entrega) do
     costo_envio = if forma_entrega == :correo, do: 50, else: 0
     IO.puts("Compra N° #{compra_id}: costo de envío de $#{costo_envio} rupias")
@@ -70,7 +73,7 @@ defmodule Libremarket.Envios.Server do
     case :erlang.binary_to_term(payload) do
       {:calcular_costo, compra_id, forma_entrega} ->
         costo_envio = Libremarket.Envios.calcular_costo(compra_id, forma_entrega)
-        Producer.send_message(@compras_queue_name, {:registrar_costo_envio, compra_id, costo_envio})
+        Producer.send_message(@compras_queue_name, {:informar_costo_envio, compra_id, costo_envio})
         {:noreply, state}
 
       {:agendar_envio, compra_id} ->

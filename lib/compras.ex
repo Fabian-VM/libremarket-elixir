@@ -3,20 +3,12 @@ defmodule Libremarket.Compras do
   Módulo de lógica de compras
   """
 
-  def crear_compra(compra_id, producto_id) do
-    IO.puts("Compra N° #{compra_id}: creada con producto ##{producto_id} seleccionado")
-      %{
-        compra_id: compra_id,
-        producto_id: producto_id,
-        forma_entrega: nil,
-        medio_pago: nil,
-        costo_envio: nil,
-        confirmada_por_usuario: nil,
-        infraccion_detectada: nil,
-        producto_esta_reservado: nil,
-        pago_autorizado: nil,
-        finalizado_con_exito: nil
-      }
+  # OPERACIONES DEL DIAGRAMA
+  # -------------------------------------
+
+  def seleccionar_producto(compra, producto_id) do
+    IO.puts("Compra N° #{compra.compra_id}: producto ##{producto_id} seleccionado")
+    %{ compra | producto_id: producto_id }
   end
 
   def seleccionar_forma_entrega(compra, forma_entrega) do
@@ -30,30 +22,72 @@ defmodule Libremarket.Compras do
   end
 
   def confirmar_compra(compra, confirma_compra) do
-    IO.puts("Compra N° #{compra.compra_id}: se registra que el usuario #{if confirma_compra, do: "ha", else: "no ha"} confirmado la compra")
+    IO.puts("Compra N° #{compra.compra_id}: la compra #{if confirma_compra, do: "ha sido", else: "no ha sido"} confirmada por el usuario")
     %{ compra | confirmada_por_usuario: confirma_compra }
   end
 
+  def informar_compra_no_confirmada_por_usuario(compra) do
+    IO.puts("Compra N° #{compra.compra_id}: se informa que no fue confirmada por el usuario")
+  end
+
+  def informar_infraccion(compra) do
+    IO.puts("Compra N° #{compra.compra_id}: se informa que se detectó una infracción")
+  end
+
+  def informar_pago_rechazado(compra) do
+    IO.puts("Compra N° #{compra.compra_id}: se informa que el pago fue rechazado")
+  end
+
+  def informar_stock_insuficiente(compra) do
+    IO.puts("Compra N° #{compra.compra_id}: se informa que no hubo stock suficiente del producto")
+  end
+
+  def finalizar_compra(compra, finalizado_con_exito) do
+    if finalizado_con_exito do
+      IO.puts("Compra N° #{compra.compra_id}: se ha finalizado su compra con éxito. Hasta nunca!")
+    else
+      IO.puts("Compra N° #{compra.compra_id}: se ha cancelado su compra")
+    end
+    %{ compra | finalizado_con_exito: finalizado_con_exito }
+  end
+
+
+
+
+  # UTILIDADES
+  # -------------------------------------
+
+  def crear_compra(compra_id) do
+    IO.puts("Compra N° #{compra_id}: nueva compra iniciada")
+      %{
+        compra_id: compra_id,
+        producto_id: nil,
+        forma_entrega: nil,
+        medio_pago: nil,
+        costo_envio: nil,
+        confirmada_por_usuario: nil,
+        infraccion_detectada: nil,
+        producto_esta_reservado: nil,
+        pago_autorizado: nil,
+        finalizado_con_exito: nil
+      }
+  end
+
   def registrar_estado_infraccion(compra, infraccion_detectada) do
-    IO.puts("Compra N° #{compra.compra_id}: se registra que #{if infraccion_detectada, do: "hubo", else: "no hubo"} infraccion")
     %{ compra | infraccion_detectada: infraccion_detectada }
   end
 
+  def registrar_estado_pago(compra, pago_autorizado) do
+    %{ compra | pago_autorizado: pago_autorizado }
+  end
+
   def registrar_estado_reservacion(compra, producto_esta_reservado) do
-    IO.puts("Compra N° #{compra.compra_id}: se registra que #{if producto_esta_reservado, do: "se ha", else: "no se ha"} reservado una unidad del producto")
     %{ compra | producto_esta_reservado: producto_esta_reservado }
   end
 
   def registrar_costo_envio(compra, costo_envio) do
-    IO.puts("Compra N° #{compra.compra_id}: se registra que el costo de envio es de $#{costo_envio}")
     %{ compra | costo_envio: costo_envio }
   end
-
-  def registrar_estado_pago(compra, pago_autorizado) do
-    IO.puts("Compra N° #{compra.compra_id}: se registra que el pago #{if pago_autorizado, do: "fue", else: "no fue"} autorizado")
-    %{ compra | pago_autorizado: pago_autorizado }
-  end
-
 
   # Encontrar una compra en una lista de compras
   def find_compra_by_id(compras, compra_id) do
@@ -67,6 +101,48 @@ defmodule Libremarket.Compras do
     end)
   end
 
+  def evaluar_si_continuar_con_pagos(compra, cola_mensajes) do
+    # Punto de sincronización
+    # Algunos resultados pueden haber llegado previamente
+    # Ante la llegada de cualquier mensaje, verifico todo
+    # En algun momento llegará un mensaje que hará que todo se cumpla
+    if (
+      compra.confirmada_por_usuario != nil      # de compras
+      and compra.infraccion_detectada != nil    # de infracciones
+      and compra.producto_esta_reservado != nil # de ventas
+      and compra.costo_envio != nil             # de envios
+      and compra.finalizado_con_exito == nil    # si la compra ya fue finalizada, salir
+    ) do
+      cond do
+        # Este caso aparece en el diagrama
+        compra.infraccion_detectada ->
+          Libremarket.Compras.informar_infraccion(compra)
+          Libremarket.Compras.finalizar_compra(compra, false)
+
+        # Este caso no aparece en el diagrama
+        not compra.confirmada_por_usuario ->
+          Libremarket.Compras.informar_compra_no_confirmada_por_usuario(compra)
+          Libremarket.Compras.finalizar_compra(compra, false)
+
+        # Este caso tampoco aparece en el diagrama
+        not compra.producto_esta_reservado ->
+          Libremarket.Compras.informar_stock_insuficiente(compra)
+          Libremarket.Compras.finalizar_compra(compra, false)
+
+        # Si todo se cumplió por fin
+        true ->
+          Producer.send_message(cola_mensajes, {:autorizar_pago, compra.compra_id})
+          compra
+
+      end
+
+    else
+      compra
+
+    end
+
+  end
+
 end
 
 defmodule Libremarket.Compras.Server do
@@ -77,7 +153,6 @@ defmodule Libremarket.Compras.Server do
   use GenServer
   use AMQP
 
-  @ui_queue_name "ui"
   @compras_queue_name "compras"
   @infracciones_queue_name "infracciones"
   @ventas_queue_name "ventas"
@@ -112,6 +187,7 @@ defmodule Libremarket.Compras.Server do
 
     initial_state = %{
       amqp_channel: amqp_channel,
+      secuencia_id: 0,
       compras: []
     }
 
@@ -133,134 +209,77 @@ defmodule Libremarket.Compras.Server do
   # Recepción de mensajes
   @impl true
   def handle_info({:basic_deliver, payload, _meta}, state) do
+
     case :erlang.binary_to_term(payload) do
-      {:seleccionar_producto, compra_id, producto_id} ->
-        compra = Libremarket.Compras.crear_compra(compra_id, producto_id)
-        new_state = %{
-          state |
-          compras: [compra | state.compras]
-        }
-        Producer.send_message(@ui_queue_name, {:seleccionar_forma_entrega, compra_id})
-        Producer.send_message(@ventas_queue_name, {:reservar_producto, compra_id, producto_id})
-        Producer.send_message(@infracciones_queue_name, {:detectar_infracciones, compra_id})
+
+      {:simular_compra, producto_id, forma_entrega, medio_pago, confirmada_por_usuario} ->
+        compra = Libremarket.Compras.crear_compra(state.secuencia_id + 1)
+
+        compra = Libremarket.Compras.seleccionar_producto(compra, producto_id)
+        compra = Libremarket.Compras.seleccionar_forma_entrega(compra, forma_entrega)
+        Producer.send_message(@ventas_queue_name, {:reservar_producto, compra.compra_id, producto_id})
+        Producer.send_message(@infracciones_queue_name, {:detectar_infracciones, compra.compra_id})
+
+        compra =
+          if forma_entrega == :correo do
+            Producer.send_message(@envios_queue_name, {:calcular_costo, compra.compra_id, forma_entrega})
+            compra
+          else
+            Libremarket.Compras.registrar_costo_envio(compra, 0)
+          end
+
+        compra = Libremarket.Compras.seleccionar_medio_pago(compra, medio_pago)
+        compra = Libremarket.Compras.confirmar_compra(compra, confirmada_por_usuario)
+
+        new_state = %{ state | secuencia_id: compra.compra_id, compras: [ compra | state.compras ]}
         {:noreply, new_state}
 
 
-      {:seleccionar_forma_entrega, compra_id, forma_entrega} ->
+      {:informar_costo_envio, compra_id, costo_envio} ->
         compra = Libremarket.Compras.find_compra_by_id(state.compras, compra_id)
-        compra_actualizada = Libremarket.Compras.seleccionar_forma_entrega(compra, forma_entrega)
-        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra_actualizada)}
-        if forma_entrega == :retira do
-          Producer.send_message(@ui_queue_name, {:seleccionar_medio_pago, compra_id})
-        else
-          Producer.send_message(@envios_queue_name, {:calcular_costo, compra_id, forma_entrega})
-        end
-        {:noreply, new_state}
+        compra = Libremarket.Compras.registrar_costo_envio(compra, costo_envio)
 
+        compra = Libremarket.Compras.evaluar_si_continuar_con_pagos(compra, @pagos_queue_name)
 
-      {:registrar_costo_envio, compra_id, costo_envio} ->
-        compra = Libremarket.Compras.find_compra_by_id(state.compras, compra_id)
-        compra_actualizada = Libremarket.Compras.registrar_costo_envio(compra, costo_envio)
-        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra_actualizada)}
-        Producer.send_message(@ui_queue_name, {:seleccionar_medio_pago, compra_id})
-        {:noreply, new_state}
-
-
-      {:seleccionar_medio_pago, compra_id, medio_pago} ->
-        compra = Libremarket.Compras.find_compra_by_id(state.compras, compra_id)
-        compra_actualizada = Libremarket.Compras.seleccionar_medio_pago(compra, medio_pago)
-        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra_actualizada)}
-        Producer.send_message(@ui_queue_name, {:confirmar_compra, compra_id})
-        {:noreply, new_state}
-
-
-      {:confirmar_compra, compra_id, confirma_compra} ->
-        compra = Libremarket.Compras.find_compra_by_id(state.compras, compra_id)
-        compra_actualizada = Libremarket.Compras.confirmar_compra(compra, confirma_compra)
-        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra_actualizada)}
-        case compra_actualizada.producto_esta_reservado do
-          nil -> nil
-          false -> Producer.send_message(@ui_queue_name, {:informar_stock_insuficiente, compra_id})
-          true ->
-            case compra_actualizada.confirmada_por_usuario do
-              nil -> nil
-              false -> nil
-              true ->
-                case compra_actualizada.infraccion_detectada do
-                  nil -> nil
-                  false -> Producer.send_message(@pagos_queue_name, {:autorizar_pago, compra_id})
-                  true -> Producer.send_message(@ui_queue_name, {:informar_infraccion, compra_id})
-                end
-            end
-        end
+        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra)}
         {:noreply, new_state}
 
 
       {:informar_estado_infraccion, compra_id, infraccion_detectada} ->
         compra = Libremarket.Compras.find_compra_by_id(state.compras, compra_id)
-        compra_actualizada = Libremarket.Compras.registrar_estado_infraccion(compra, infraccion_detectada)
-        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra_actualizada)}
-        case compra_actualizada.producto_esta_reservado do
-          nil -> nil
-          false -> Producer.send_message(@ui_queue_name, {:informar_stock_insuficiente, compra_id})
-          true ->
-            case compra_actualizada.confirmada_por_usuario do
-              nil -> nil
-              false -> nil
-              true ->
-                case compra_actualizada.infraccion_detectada do
-                  nil -> nil
-                  false -> Producer.send_message(@pagos_queue_name, {:autorizar_pago, compra_id})
-                  true -> Producer.send_message(@ui_queue_name, {:informar_infraccion, compra_id})
-                end
-            end
-        end
+        compra = Libremarket.Compras.registrar_estado_infraccion(compra, infraccion_detectada)
+
+        compra = Libremarket.Compras.evaluar_si_continuar_con_pagos(compra, @pagos_queue_name)
+
+        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra)}
         {:noreply, new_state}
 
 
       {:informar_estado_reservacion, compra_id, producto_esta_reservado} ->
         compra = Libremarket.Compras.find_compra_by_id(state.compras, compra_id)
-        compra_actualizada = Libremarket.Compras.registrar_estado_reservacion(compra, producto_esta_reservado)
-        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra_actualizada)}
-        case compra_actualizada.producto_esta_reservado do
-          nil -> nil
-          false -> Producer.send_message(@ui_queue_name, {:informar_stock_insuficiente, compra_id})
-          true ->
-            case compra_actualizada.confirmada_por_usuario do
-              nil -> nil
-              false -> nil
-              true ->
-                case compra_actualizada.infraccion_detectada do
-                  nil -> nil
-                  false -> Producer.send_message(@pagos_queue_name, {:autorizar_pago, compra_id})
-                  true -> Producer.send_message(@ui_queue_name, {:informar_infraccion, compra_id})
-                end
-            end
-        end
+        compra = Libremarket.Compras.registrar_estado_reservacion(compra, producto_esta_reservado)
+
+        compra = Libremarket.Compras.evaluar_si_continuar_con_pagos(compra, @pagos_queue_name)
+
+        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra)}
         {:noreply, new_state}
 
 
       {:informar_estado_pago, compra_id, pago_autorizado} ->
         compra = Libremarket.Compras.find_compra_by_id(state.compras, compra_id)
-        compra_actualizada = (
+        compra = Libremarket.Compras.registrar_estado_pago(compra, pago_autorizado)
+        compra =
           if not pago_autorizado do
-            Producer.send_message(@ui_queue_name, {:informar_pago_rechazado, compra_id})
-            %{
-              Libremarket.Compras.registrar_estado_pago(compra, pago_autorizado) |
-              finalizado_con_exito: false
-            }
+            Libremarket.Compras.informar_pago_rechazado(compra)
+            Libremarket.Compras.finalizar_compra(compra, false)
           else
             if compra.forma_entrega == :correo do
               Producer.send_message(@envios_queue_name, {:agendar_envio, compra_id})
             end
-            Producer.send_message(@ui_queue_name, {:informar_compra_finalizada, compra_id})
-            %{
-              Libremarket.Compras.registrar_estado_pago(compra, pago_autorizado) |
-              finalizado_con_exito: true
-            }
+            Libremarket.Compras.finalizar_compra(compra, true)
           end
-        )
-        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra_actualizada)}
+
+        new_state = %{ state | compras: Libremarket.Compras.update_in_compras(state.compras, compra)}
         {:noreply, new_state}
 
 

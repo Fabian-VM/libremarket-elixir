@@ -1,16 +1,16 @@
 services:
-  simulador:
+  compras:
     image: elixir:otp-27-alpine
-    container_name: simulador
+    container_name: compras
     volumes:
       - ./:/app
     working_dir: /app
     environment:
-      SERVER_TO_RUN: simulador
+      SERVER_TO_RUN: Libremarket.Compras.Server
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       CLOUDAMQP_URL: ${CLOUDAMQP_URL}
-    command: iex --sname simulador --cookie secret -S mix
+    command: iex --sname compras --cookie secret -S mix
     stdin_open: true
     tty: true
     user: "${DOCKER_UID}:${DOCKER_GID}"
