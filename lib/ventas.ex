@@ -1,3 +1,19 @@
+defmodule Libremarket.Ventas.Middleware do
+
+  def send_message(queue_name, message, state) do
+    sent_message = Producer.send_message_with_clock(queue_name, message, state.vector_clock, :ventas)
+    state = %{ state | vector_clock: sent_message.vector_clock }
+    state
+  end
+
+  def receive_message(raw_message, state) do
+    rcv_message = Producer.read_message_with_clock(raw_message, state.vector_clock, :ventas)
+    state = %{ state | vector_clock: rcv_message.vector_clock }
+    { rcv_message, state }
+  end
+
+end
+
 defmodule Libremarket.Ventas do
   @moduledoc """
   Módulo de lógica de ventas
@@ -7,7 +23,7 @@ defmodule Libremarket.Ventas do
   # -------------------------------------
 
   def reservar_producto(compra_id, producto) do
-    IO.puts("Compra N° #{compra_id}: unidad reservada del producto ##{producto.producto_id} (#{producto.stock} unidades disponibles)")
+    IO.puts("Compra N° #{compra_id}: unidad reservada del producto ##{producto.producto_id} (#{producto.stock} unidades disponibles)\n")
     %{
       compra_id: compra_id,
       producto_id: producto.producto_id,
@@ -20,12 +36,12 @@ defmodule Libremarket.Ventas do
   def liberar_producto(productos, compra_id, producto_id) do
     producto = find_producto_by_id(productos, producto_id)
     producto = %{ producto | stock: producto.stock + 1 }
-    IO.puts("Compra N° #{compra_id}: unidad liberada del producto ##{producto_id} (#{producto.stock} unidades restantes)")
+    IO.puts("Compra N° #{compra_id}: unidad liberada del producto ##{producto_id} (#{producto.stock} unidades restantes)\n")
     update_in_productos(productos, producto)
   end
 
   def enviar_producto(compra_id) do
-    IO.puts("Compra N° #{compra_id}: producto enviado")
+    IO.puts("Compra N° #{compra_id}: producto enviado\n")
   end
 
 
@@ -83,6 +99,8 @@ defmodule Libremarket.Ventas.Server do
 
   use GenServer
   use AMQP
+  alias Libremarket.Ventas.Middleware
+  alias Libremarket.Ventas
 
   @ventas_queue_name "ventas"
   @compras_queue_name "compras"
@@ -103,6 +121,7 @@ defmodule Libremarket.Ventas.Server do
   #   amqp_channel: {...}
   #   productos: Producto[]
   #   reservaciones: Reservacion[]
+  #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
@@ -114,6 +133,7 @@ defmodule Libremarket.Ventas.Server do
     initial_state = %{
       amqp_channel: amqp_channel,
       reservaciones: [],
+      vector_clock: Producer.VectorClock.new(),
       productos: [
         %{ producto_id: 1, stock: Enum.random(min_stock .. max_stock) },
         %{ producto_id: 2, stock: Enum.random(min_stock .. max_stock) },
@@ -142,30 +162,33 @@ defmodule Libremarket.Ventas.Server do
 
   # Recepción de mensajes
   @impl true
-  def handle_info({:basic_deliver, payload, _meta}, state) do
-    case :erlang.binary_to_term(payload) do
+  def handle_info({:basic_deliver, raw_message, _meta}, state) do
+
+    {message, state} = Middleware.receive_message(raw_message, state)
+
+    case message.content do
       {:reservar_producto, compra_id, producto_id} ->
-        if (Libremarket.Ventas.stock_suficiente(state.productos, producto_id)) do
-          producto = Libremarket.Ventas.find_producto_by_id(state.productos, producto_id)
+        if (Ventas.stock_suficiente(state.productos, producto_id)) do
+          producto = Ventas.find_producto_by_id(state.productos, producto_id)
           producto = %{ producto | stock: producto.stock - 1 }
-          reservacion = Libremarket.Ventas.reservar_producto(compra_id, producto)
-          new_state = %{
+          reservacion = Ventas.reservar_producto(compra_id, producto)
+          state = %{
             state |
             reservaciones: [ reservacion | state.reservaciones ],
-            productos: Libremarket.Ventas.update_in_productos(state.productos, producto)
+            productos: Ventas.update_in_productos(state.productos, producto)
           }
-          Producer.send_message(@compras_queue_name, {:informar_estado_reservacion, compra_id, true})
-          {:noreply, new_state}
+          state = Middleware.send_message(@compras_queue_name, {:informar_estado_reservacion, compra_id, true}, state)
+          {:noreply, state}
         else
-          Producer.send_message(@compras_queue_name, {:informar_estado_reservacion, compra_id, false})
+          state = Middleware.send_message(@compras_queue_name, {:informar_estado_reservacion, compra_id, false}, state)
           {:noreply, state}
         end
 
 
 
       {:informar_estado_infraccion, compra_id, infraccion_detectada} ->
-        reservacion = Libremarket.Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
-        reservacion = Libremarket.Ventas.registrar_estado_infraccion(reservacion, infraccion_detectada)
+        reservacion = Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
+        reservacion = Ventas.registrar_estado_infraccion(reservacion, infraccion_detectada)
 
         # Si algo salió mal, liberar producto
         productos_actualizados =
@@ -173,7 +196,7 @@ defmodule Libremarket.Ventas.Server do
             reservacion.infraccion_detectada == true or
             reservacion.pago_autorizado == false
           ) do
-            Libremarket.Ventas.liberar_producto(state.productos, compra_id, reservacion.producto_id)
+            Ventas.liberar_producto(state.productos, compra_id, reservacion.producto_id)
           else
             state.productos
           end
@@ -184,20 +207,20 @@ defmodule Libremarket.Ventas.Server do
           reservacion.pago_autorizado == true and
           reservacion.fecha_envio != nil
         ) do
-          Libremarket.Ventas.enviar_producto(compra_id)
+          Ventas.enviar_producto(compra_id)
         end
 
-        new_state = %{
+        state = %{
           state |
           productos: productos_actualizados,
-          reservaciones: Libremarket.Ventas.update_in_reservaciones(state.reservaciones, reservacion)
+          reservaciones: Ventas.update_in_reservaciones(state.reservaciones, reservacion)
         }
-        {:noreply, new_state}
+        {:noreply, state}
 
 
       {:informar_estado_pago, compra_id, pago_autorizado} ->
-        reservacion = Libremarket.Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
-        reservacion = Libremarket.Ventas.registrar_estado_pago(reservacion, pago_autorizado)
+        reservacion = Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
+        reservacion = Ventas.registrar_estado_pago(reservacion, pago_autorizado)
 
         # Si algo salió mal, liberar producto
         productos_actualizados =
@@ -205,7 +228,7 @@ defmodule Libremarket.Ventas.Server do
             reservacion.infraccion_detectada == true or
             reservacion.pago_autorizado == false
           ) do
-            Libremarket.Ventas.liberar_producto(state.productos, compra_id, reservacion.producto_id)
+            Ventas.liberar_producto(state.productos, compra_id, reservacion.producto_id)
           else
             state.productos
           end
@@ -216,21 +239,21 @@ defmodule Libremarket.Ventas.Server do
           reservacion.pago_autorizado == true and
           reservacion.fecha_envio != nil
         ) do
-          Libremarket.Ventas.enviar_producto(compra_id)
+          Ventas.enviar_producto(compra_id)
         end
 
-        new_state = %{
+        state = %{
           state |
           productos: productos_actualizados,
-          reservaciones: Libremarket.Ventas.update_in_reservaciones(state.reservaciones, reservacion)
+          reservaciones: Ventas.update_in_reservaciones(state.reservaciones, reservacion)
         }
-        {:noreply, new_state}
+        {:noreply, state}
 
 
 
       {:agendar_envio, compra_id, fecha_envio} ->
-        reservacion = Libremarket.Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
-        reservacion = Libremarket.Ventas.registrar_fecha_envio(reservacion, fecha_envio)
+        reservacion = Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
+        reservacion = Ventas.registrar_fecha_envio(reservacion, fecha_envio)
 
         # Si todo salió bien, enviar producto
         if (
@@ -238,14 +261,14 @@ defmodule Libremarket.Ventas.Server do
           reservacion.pago_autorizado == true and
           reservacion.fecha_envio != nil
         ) do
-          Libremarket.Ventas.enviar_producto(compra_id)
+          Ventas.enviar_producto(compra_id)
         end
 
-        new_state = %{
+        state = %{
           state |
-          reservaciones: Libremarket.Ventas.update_in_reservaciones(state.reservaciones, reservacion)
+          reservaciones: Ventas.update_in_reservaciones(state.reservaciones, reservacion)
         }
-        {:noreply, new_state}
+        {:noreply, state}
 
 
 
@@ -256,7 +279,7 @@ defmodule Libremarket.Ventas.Server do
 
 
       bad_payload ->
-        IO.puts("ADVERTENCIA: el payload no coincidió con ningun patrón -> #{inspect(bad_payload)}")
+        IO.puts("ADVERTENCIA: el payload no coincidió con ningun patrón -> #{inspect(bad_payload)}\n")
         {:noreply, state}
 
     end

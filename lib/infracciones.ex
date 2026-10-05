@@ -1,10 +1,26 @@
+defmodule Libremarket.Infracciones.Middleware do
+
+  def send_message(queue_name, message, state) do
+    sent_message = Producer.send_message_with_clock(queue_name, message, state.vector_clock, :infracciones)
+    state = %{ state | vector_clock: sent_message.vector_clock }
+    state
+  end
+
+  def receive_message(raw_message, state) do
+    rcv_message = Producer.read_message_with_clock(raw_message, state.vector_clock, :infracciones)
+    state = %{ state | vector_clock: rcv_message.vector_clock }
+    { rcv_message, state }
+  end
+
+end
+
 defmodule Libremarket.Infracciones do
 
   # OPERACIONES DEL DIAGRAMA
   # -------------------------------------
 
   def detectar_infracciones(compra_id, infraccion_detectada) do
-    IO.puts("Compra N° #{compra_id}: #{if infraccion_detectada, do: "se ha detectado una", else: "no se ha detectado ninguna"} infracción")
+    IO.puts("Compra N° #{compra_id}: #{if infraccion_detectada, do: "se ha detectado una", else: "no se ha detectado ninguna"} infracción\n")
     %{ compra_id: compra_id, infraccion_detectada: infraccion_detectada }
   end
 
@@ -28,6 +44,8 @@ defmodule Libremarket.Infracciones.Server do
 
   use GenServer
   use AMQP
+  alias Libremarket.Infracciones
+  alias Libremarket.Infracciones.Middleware
 
   @compras_queue_name "compras"
   @infracciones_queue_name "infracciones"
@@ -48,6 +66,7 @@ defmodule Libremarket.Infracciones.Server do
   # state {
   #   amqp_channel: {...}
   #   infracciones: Infraccion[]
+  #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
@@ -57,7 +76,8 @@ defmodule Libremarket.Infracciones.Server do
 
     initial_state = %{
       amqp_channel: amqp_channel,
-      infracciones: []
+      infracciones: [],
+      vector_clock: Producer.VectorClock.new()
     }
 
     {:ok, initial_state}
@@ -72,15 +92,18 @@ defmodule Libremarket.Infracciones.Server do
 
   # Recepción de mensajes
   @impl true
-  def handle_info({:basic_deliver, payload, _meta}, state) do
-    case :erlang.binary_to_term(payload) do
+  def handle_info({:basic_deliver, raw_message, _meta}, state) do
+
+    {message, state} = Middleware.receive_message(raw_message, state)
+
+    case message.content do
       {:detectar_infracciones, compra_id} ->
-        estado_infraccion = Libremarket.Infracciones.verificar_infraccion()
-        infraccion = Libremarket.Infracciones.detectar_infracciones(compra_id, estado_infraccion)
-        new_state = %{ state | infracciones: [ infraccion | state.infracciones ] }
-        Producer.send_message(@compras_queue_name, {:informar_estado_infraccion, compra_id, estado_infraccion})
-        Producer.send_message(@ventas_queue_name, {:informar_estado_infraccion, compra_id, estado_infraccion})
-        {:noreply, new_state}
+        estado_infraccion = Infracciones.verificar_infraccion()
+        infraccion = Infracciones.detectar_infracciones(compra_id, estado_infraccion)
+        state = %{ state | infracciones: [ infraccion | state.infracciones ] }
+        state = Middleware.send_message(@compras_queue_name, {:informar_estado_infraccion, compra_id, estado_infraccion}, state)
+        state = Middleware.send_message(@ventas_queue_name, {:informar_estado_infraccion, compra_id, estado_infraccion}, state)
+        {:noreply, state}
 
 
       {:show_state} ->
@@ -89,7 +112,7 @@ defmodule Libremarket.Infracciones.Server do
 
 
       bad_payload ->
-        IO.puts("ADVERTENCIA: el payload no coincidió con ningun patrón -> #{inspect(bad_payload)}")
+        IO.puts("ADVERTENCIA: el payload no coincidió con ningun patrón -> #{inspect(bad_payload)}\n")
         {:noreply, state}
 
     end

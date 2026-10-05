@@ -1,3 +1,20 @@
+defmodule Libremarket.Envios.Middleware do
+
+  def send_message(queue_name, message, state) do
+    sent_message = Producer.send_message_with_clock(queue_name, message, state.vector_clock, :envios)
+    state = %{ state | vector_clock: sent_message.vector_clock }
+    state
+  end
+
+  def receive_message(raw_message, state) do
+    rcv_message = Producer.read_message_with_clock(raw_message, state.vector_clock, :envios)
+    state = %{ state | vector_clock: rcv_message.vector_clock }
+    { rcv_message, state }
+  end
+
+end
+
+
 defmodule Libremarket.Envios do
   @moduledoc """
   Módulo de lógica de envios
@@ -8,13 +25,13 @@ defmodule Libremarket.Envios do
 
   def calcular_costo(compra_id, forma_entrega) do
     costo_envio = if forma_entrega == :correo, do: 50, else: 0
-    IO.puts("Compra N° #{compra_id}: costo de envío de $#{costo_envio} rupias")
+    IO.puts("Compra N° #{compra_id}: costo de envío de $#{costo_envio} rupias\n")
     costo_envio
   end
 
   def agendar_envio(compra_id) do
     fecha = Date.utc_today()
-    IO.puts("Compra N° #{compra_id}: envio agendado para el dia #{fecha}")
+    IO.puts("Compra N° #{compra_id}: envio agendado para el dia #{fecha}\n")
     fecha
   end
 
@@ -27,6 +44,8 @@ defmodule Libremarket.Envios.Server do
 
   use GenServer
   use AMQP
+  alias Libremarket.Envios
+  alias Libremarket.Envios.Middleware
 
   @compras_queue_name "compras"
   @ventas_queue_name "ventas"
@@ -45,7 +64,8 @@ defmodule Libremarket.Envios.Server do
   # -------------------------------------
 
   # state {
-  #   amqp_channel: {...}
+  #   amqp_channel: {...},
+  #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
@@ -55,6 +75,7 @@ defmodule Libremarket.Envios.Server do
 
     initial_state = %{
       amqp_channel: amqp_channel,
+      vector_clock: Producer.VectorClock.new()
     }
 
     {:ok, initial_state}
@@ -69,16 +90,18 @@ defmodule Libremarket.Envios.Server do
 
   # Recepción de mensajes
   @impl true
-  def handle_info({:basic_deliver, payload, _meta}, state) do
-    case :erlang.binary_to_term(payload) do
+  def handle_info({:basic_deliver, raw_message, _meta}, state) do
+    {message, state} = Middleware.receive_message(raw_message, state)
+
+    case message.content do
       {:calcular_costo, compra_id, forma_entrega} ->
-        costo_envio = Libremarket.Envios.calcular_costo(compra_id, forma_entrega)
-        Producer.send_message(@compras_queue_name, {:informar_costo_envio, compra_id, costo_envio})
+        costo_envio = Envios.calcular_costo(compra_id, forma_entrega)
+        state = Middleware.send_message(@compras_queue_name, {:informar_costo_envio, compra_id, costo_envio}, state)
         {:noreply, state}
 
       {:agendar_envio, compra_id} ->
-        fecha_envio = Libremarket.Envios.agendar_envio(compra_id)
-        Producer.send_message(@ventas_queue_name, {:agendar_envio, compra_id, fecha_envio})
+        fecha_envio = Envios.agendar_envio(compra_id)
+        state = Middleware.send_message(@ventas_queue_name, {:agendar_envio, compra_id, fecha_envio}, state)
         {:noreply, state}
 
 
@@ -88,7 +111,7 @@ defmodule Libremarket.Envios.Server do
 
 
       bad_payload ->
-        IO.puts("ADVERTENCIA: el payload no coincidió con ningun patrón -> #{inspect(bad_payload)}")
+        IO.puts("ADVERTENCIA: el payload no coincidió con ningun patrón -> #{inspect(bad_payload)}\n")
         {:noreply, state}
 
     end

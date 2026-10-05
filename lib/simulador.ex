@@ -10,6 +10,7 @@ defmodule Simulador do
   """
   def show_state(queue) do
     Producer.send_message(queue, {:show_state})
+    :ok
   end
 
   def simular_compra(producto_id) do

@@ -10,6 +10,7 @@ defmodule Libremarket.Ui do
       @compras_queue_name,
       {:simular_compra, producto_id, forma_entrega, medio_pago, confirma_compra}
     )
+    :ok
   end
 
 end
