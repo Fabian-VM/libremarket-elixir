@@ -1,18 +1,3 @@
-defmodule Libremarket.Compras.Middleware do
-
-  def send_message(queue_name, message, state) do
-    sent_message = Producer.send_message_with_clock(queue_name, message, state.vector_clock, :compras)
-    state = %{ state | vector_clock: sent_message.vector_clock }
-    state
-  end
-
-  def receive_message(raw_message, state) do
-    rcv_message = Producer.read_message_with_clock(raw_message, state.vector_clock, :compras)
-    state = %{ state | vector_clock: rcv_message.vector_clock }
-    { rcv_message, state }
-  end
-
-end
 
 defmodule Libremarket.Compras do
   @moduledoc """
@@ -20,7 +5,6 @@ defmodule Libremarket.Compras do
   """
 
   alias Libremarket.Compras
-  alias Libremarket.Compras.Middleware
 
   # OPERACIONES DEL DIAGRAMA
   # -------------------------------------
@@ -153,7 +137,7 @@ defmodule Libremarket.Compras do
 
         # Si todo se cumplió por fin
         true ->
-          state = Middleware.send_message(cola_mensajes, {:autorizar_pago, compra.compra_id}, state)
+          state = Middleware.send_message_server(cola_mensajes, {:autorizar_pago, compra.compra_id}, state)
           {compra, state}
 
       end
@@ -174,15 +158,7 @@ defmodule Libremarket.Compras.Server do
 
   use GenServer
   use AMQP
-  alias Libremarket.Compras.Middleware
   alias Libremarket.Compras
-
-  @compras_queue_name "compras"
-  @infracciones_queue_name "infracciones"
-  @ventas_queue_name "ventas"
-  @envios_queue_name "envios"
-  @pagos_queue_name "pagos"
-
 
   # FUNCIONES PÚBLICAS
   # -------------------------------------
@@ -203,19 +179,23 @@ defmodule Libremarket.Compras.Server do
   #   amqp_channel: {...}
   #   compras: Compra[],
   #   secuencia_id: Numero,
+  #   events: [],
+  #   vector_component: VectorClock.component
   #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
     {:ok, amqp_channel} = AMQP.Application.get_channel(:channel)
-    Queue.declare(amqp_channel, @compras_queue_name, durable: true)
-    Basic.consume(amqp_channel, @compras_queue_name, nil, no_ack: true)
+    Queue.declare(amqp_channel, Constantes.compras_queue(), durable: true)
+    Basic.consume(amqp_channel, Constantes.compras_queue(), nil, no_ack: true)
 
     initial_state = %{
       amqp_channel: amqp_channel,
-      secuencia_id: 0,
       compras: [],
-      vector_clock: Producer.VectorClock.new()
+      secuencia_id: 0,
+      messages: [],
+      vector_component: :compras,
+      vector_clock: Middleware.VectorClock.new()
     }
 
     {:ok, initial_state}
@@ -237,7 +217,7 @@ defmodule Libremarket.Compras.Server do
   @impl true
   def handle_info({:basic_deliver, raw_message, _meta}, state) do
 
-    {message, state} = Middleware.receive_message(raw_message, state)
+    {message, state} = Middleware.read_message_server(raw_message, state)
 
     case message.content do
       {:simular_compra, producto_id, forma_entrega, medio_pago, confirmada_por_usuario} ->
@@ -245,11 +225,11 @@ defmodule Libremarket.Compras.Server do
 
         compra = Compras.seleccionar_producto(compra, producto_id)
         compra = Compras.seleccionar_forma_entrega(compra, forma_entrega)
-        state = Middleware.send_message(@ventas_queue_name, {:reservar_producto, compra.compra_id, producto_id}, state)
-        state = Middleware.send_message(@infracciones_queue_name, {:detectar_infracciones, compra.compra_id}, state)
+        state = Middleware.send_message_server(Constantes.ventas_queue(), {:reservar_producto, compra.compra_id, producto_id}, state)
+        state = Middleware.send_message_server(Constantes.infracciones_queue(), {:detectar_infracciones, compra.compra_id}, state)
 
         state =
-          if forma_entrega == :correo do Middleware.send_message(@envios_queue_name, {:calcular_costo, compra.compra_id, forma_entrega}, state)
+          if forma_entrega == :correo do Middleware.send_message_server(Constantes.envios_queue(), {:calcular_costo, compra.compra_id, forma_entrega}, state)
           else state
           end
 
@@ -269,7 +249,7 @@ defmodule Libremarket.Compras.Server do
         compra = Compras.find_compra_by_id(state.compras, compra_id)
         compra = Compras.registrar_costo_envio(compra, costo_envio)
 
-        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, @pagos_queue_name, state)
+        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, Constantes.pagos_queue(), state)
 
         state = %{ state | compras: Compras.update_in_compras(state.compras, compra)}
         {:noreply, state}
@@ -279,7 +259,7 @@ defmodule Libremarket.Compras.Server do
         compra = Compras.find_compra_by_id(state.compras, compra_id)
         compra = Compras.registrar_estado_infraccion(compra, infraccion_detectada)
 
-        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, @pagos_queue_name, state)
+        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, Constantes.pagos_queue(), state)
 
         state = %{ state | compras: Compras.update_in_compras(state.compras, compra)}
         {:noreply, state}
@@ -289,7 +269,7 @@ defmodule Libremarket.Compras.Server do
         compra = Compras.find_compra_by_id(state.compras, compra_id)
         compra = Compras.registrar_estado_reservacion(compra, producto_esta_reservado)
 
-        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, @pagos_queue_name, state)
+        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, Constantes.pagos_queue(), state)
 
         state = %{ state | compras: Compras.update_in_compras(state.compras, compra)}
         {:noreply, state}
@@ -301,7 +281,7 @@ defmodule Libremarket.Compras.Server do
 
         state =
           if pago_autorizado and compra.forma_entrega == :correo do
-            Middleware.send_message(@envios_queue_name, {:agendar_envio, compra_id}, state)
+            Middleware.send_message_server(Constantes.envios_queue(), {:agendar_envio, compra_id}, state)
           else
             state
           end
@@ -320,6 +300,23 @@ defmodule Libremarket.Compras.Server do
 
       {:show_state} ->
         IO.inspect(state)
+        {:noreply, state}
+
+
+      {:show_clock} ->
+        Middleware.VectorClock.print(state.vector_clock)
+        {:noreply, state}
+
+      {:show_count_compras} ->
+        totales = length(state.compras)
+        exitosos = Estadisticas.contar(state.compras, :finalizado_con_exito, true)
+        IO.puts(
+          "Conteo de compras\n" <>
+          "-----------------\n" <>
+          "Totales................. #{totales}\n" <>
+          "Finalizados con éxito... #{exitosos}\n" <>
+          "No finalizados.......... #{totales - exitosos}\n"
+        )
         {:noreply, state}
 
 
