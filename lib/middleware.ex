@@ -87,10 +87,10 @@ end
 # Esto implementa las funciones para parseo a string automatico
 defimpl String.Chars, for: Middleware.VectorClock do
   def to_string(clock) do
-    "[ C: #{String.pad_leading(Kernel.to_string(clock.compras), 2)} | " <>
-    "I: #{String.pad_leading(Kernel.to_string(clock.infracciones), 2)} | " <>
-    "V: #{String.pad_leading(Kernel.to_string(clock.ventas), 2)} | " <>
-    "E: #{String.pad_leading(Kernel.to_string(clock.envios), 2)} | " <>
+    "[ C: #{String.pad_leading(Kernel.to_string(clock.compras), 2)} . " <>
+    "I: #{String.pad_leading(Kernel.to_string(clock.infracciones), 2)} . " <>
+    "V: #{String.pad_leading(Kernel.to_string(clock.ventas), 2)} . " <>
+    "E: #{String.pad_leading(Kernel.to_string(clock.envios), 2)} . " <>
     "P: #{String.pad_leading(Kernel.to_string(clock.pagos), 2)} ]"
   end
 end
