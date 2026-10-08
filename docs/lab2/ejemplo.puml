@@ -1,0 +1,61 @@
+@startuml Ejemplo
+title Flujo de Compra N° 1
+
+participant compras
+participant infracciones
+participant ventas
+participant envios
+participant pagos
+
+== Inicio de compra ==
+
+compras -> compras : Compra N° 1: nueva compra iniciada
+compras -> compras : Compra N° 1: producto #4 seleccionado
+compras -> compras : Compra N° 1: forma de entrega 'correo'\nseleccionada
+
+compras -> ventas : ✉ {:reservar_producto, 1, 4}\n[C: 1 . I: 0 . V: 0 . E: 0 . P: 0]
+
+ventas -> ventas : Compra N° 1: unidad reservada del\nproducto #4 (1 unidades disponibles)
+
+compras -> infracciones : ✉ {:detectar_infracciones, 1}\n[C: 2 . I: 0 . V: 0 . E: 0 . P: 0]
+
+compras -> envios : ✉ {:calcular_costo, 1, :correo}\n[C: 3 . I: 0 . V: 0 . E: 0 . P: 0]
+
+== Proceso de compra ==
+
+compras -> compras : Compra N° 1: medio de pago 'tc'\nseleccionado
+compras -> compras : Compra N° 1: la compra ha sido\nconfirmada por el usuario
+
+ventas -> compras : ✉ {:informar_estado_reservacion, 1, true}\n[C: 1 . I: 0 . V: 2 . E: 0 . P: 0]
+
+infracciones -> infracciones : Compra N° 1: no se ha detectado\nninguna infracción
+
+envios -> envios : Compra N° 1: costo de envío de $50 rupias
+
+infracciones -> compras : ✉ {:informar_estado_infraccion, 1, false}\n[C: 2 . I: 2 . V: 0 . E: 0 . P: 0]
+
+envios -> compras : ✉ {:informar_costo_envio, 1, 50}\n[C: 3 . I: 0 . V: 0 . E: 2 . P: 0]
+
+infracciones -> ventas : ✉ {:informar_estado_infraccion, 1, false}\n[C: 2 . I: 3 . V: 0 . E: 0 . P: 0]
+
+compras -> pagos : ✉ {:autorizar_pago, 1}\n[C: 7 . I: 2 . V: 2 . E: 2 . P: 0]
+
+pagos -> pagos : Compra N° 1: pago autorizado
+
+pagos -> compras : ✉ {:informar_estado_pago, 1, true}\n[C: 7 . I: 2 . V: 2 . E: 2 . P: 2]
+
+pagos -> ventas : ✉ {:informar_estado_pago, 1, true}\n[C: 7 . I: 2 . V: 2 . E: 2 . P: 3]
+
+== Finalización y envío ==
+
+compras -> envios : ✉ {:agendar_envio, 1}\n[C: 9 . I: 2 . V: 2 . E: 2 . P: 2]
+
+compras -> compras : Compra N° 1: se ha finalizado su\ncompra con éxito. Hasta nunca!
+
+envios -> envios : Compra N° 1: envio agendado\npara el dia 2026-10-08
+
+envios -> ventas : ✉ {:agendar_envio, 1, ~D[2026-10-08]}\n[C: 9 . I: 2 . V: 2 . E: 4 . P: 2]
+
+ventas -> ventas : Compra N° 1: producto enviado
+
+@enduml

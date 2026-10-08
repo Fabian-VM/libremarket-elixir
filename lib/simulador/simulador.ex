@@ -19,13 +19,16 @@ defmodule Simulador do
     for _n <- 1 .. cantidad do
       simular_compra()
     end
+    :ok
   end
 
   def simular_compras_async(cantidad \\ 1) do
-    tasks = for _n <- 1 .. cantidad do
+    for _n <- 1 .. cantidad do
       Task.async(fn -> simular_compra() end)
     end
-    Task.await_many(tasks)
+    :ok
+    # Comentado debido a que ante 100 tareas o más puede tardar mucho y terminar en un error
+    # Task.await_many(tasks)
   end
 
 

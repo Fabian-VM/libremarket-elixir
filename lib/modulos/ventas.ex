@@ -3,18 +3,15 @@ defmodule Libremarket.Ventas do
   Módulo de lógica de ventas
   """
 
+  alias Libremarket.Ventas
+
+
   # OPERACIONES DEL DIAGRAMA
   # -------------------------------------
 
-  def reservar_producto(compra_id, producto) do
-    IO.puts("Compra N° #{compra_id}: unidad reservada del producto ##{producto.producto_id} (#{producto.stock} unidades disponibles)\n")
-    %{
-      compra_id: compra_id,
-      producto_id: producto.producto_id,
-      infraccion_detectada: nil,
-      pago_autorizado: nil,
-      fecha_envio: nil
-    }
+  def reservar_producto(reservacion, producto) do
+    IO.puts("Compra N° #{reservacion.compra_id}: unidad reservada del producto ##{producto.producto_id} (#{producto.stock} unidades disponibles)\n")
+    %{ reservacion | producto_id: producto.producto_id }
   end
 
   def liberar_producto(productos, compra_id, producto_id) do
@@ -33,8 +30,18 @@ defmodule Libremarket.Ventas do
   # UTILIDADES
   # -------------------------------------
 
-  def stock_suficiente(productos, producto_id) do
-    producto = find_producto_by_id(productos, producto_id)
+  def crear_reservacion(compra_id) do
+    %{
+      compra_id: compra_id,
+      producto_id: nil,
+      reservado: nil,
+      infraccion_detectada: nil,
+      pago_autorizado: nil,
+      fecha_envio: nil
+    }
+  end
+
+  def stock_suficiente(producto) do
     producto.stock - 1 >= 0
   end
 
@@ -72,6 +79,38 @@ defmodule Libremarket.Ventas do
     Enum.map(productos, fn producto ->
       if producto.producto_id == producto_actualizado.producto_id, do: producto_actualizado, else: producto
     end)
+  end
+
+
+  def continuar_con_envios(reservacion, state) do
+    # Punto de sincronizacion
+    # Cuando ya reciba todos los mensajes necesarios, seguirá con envios
+
+    # Si algo salió mal, liberar producto
+    productos_actualizados =
+      if (
+        reservacion.infraccion_detectada == true or
+        reservacion.pago_autorizado == false
+      ) do
+        Ventas.liberar_producto(state.productos, reservacion.compra_id, reservacion.producto_id)
+      else
+        state.productos
+      end
+
+    # Si todo salió bien, enviar producto
+    if (
+      reservacion.infraccion_detectada == false and
+      reservacion.pago_autorizado == true and
+      reservacion.fecha_envio != nil
+    ) do
+      Ventas.enviar_producto(reservacion.compra_id)
+    end
+
+    %{
+      state |
+      productos: productos_actualizados,
+      reservaciones: Ventas.update_in_reservaciones(state.reservaciones, reservacion)
+    }
   end
 
 end
@@ -148,86 +187,46 @@ defmodule Libremarket.Ventas.Server do
     {message, state} = Middleware.read_message_server(raw_message, state)
 
     case message.content do
-      {:reservar_producto, compra_id, producto_id} ->
-        if (Ventas.stock_suficiente(state.productos, producto_id)) do
-          producto = Ventas.find_producto_by_id(state.productos, producto_id)
-          producto = %{ producto | stock: producto.stock - 1 }
-          reservacion = Ventas.reservar_producto(compra_id, producto)
-          state = %{
-            state |
-            reservaciones: [ reservacion | state.reservaciones ],
-            productos: Ventas.update_in_productos(state.productos, producto)
-          }
-          state = Middleware.send_message_server(Constantes.compras_queue(), {:informar_estado_reservacion, compra_id, true}, state)
-          {:noreply, state}
-        else
-          state = Middleware.send_message_server(Constantes.compras_queue(), {:informar_estado_reservacion, compra_id, false}, state)
-          {:noreply, state}
-        end
 
+      {:reservar_producto, compra_id, producto_id} ->
+        producto = Ventas.find_producto_by_id(state.productos, producto_id)
+        reservacion = Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
+        reservacion = if reservacion != nil, do: reservacion, else: Ventas.crear_reservacion(compra_id)
+
+        state =
+          if (Ventas.stock_suficiente(producto)) do
+            reservacion = Ventas.reservar_producto(reservacion, producto)
+            producto = %{ producto | stock: producto.stock - 1 }
+            state = %{
+              state |
+              reservaciones: [ reservacion | state.reservaciones ],
+              productos: Ventas.update_in_productos(state.productos, producto)
+            }
+            Middleware.send_message_server(Constantes.compras_queue(), {:informar_estado_reservacion, compra_id, true}, state)
+          else
+            Middleware.send_message_server(Constantes.compras_queue(), {:informar_estado_reservacion, compra_id, false}, state)
+          end
+
+        {:noreply, state}
 
 
       {:informar_estado_infraccion, compra_id, infraccion_detectada} ->
         reservacion = Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
+        reservacion = if reservacion != nil, do: reservacion, else: Ventas.crear_reservacion(compra_id)
         reservacion = Ventas.registrar_estado_infraccion(reservacion, infraccion_detectada)
 
-        # Si algo salió mal, liberar producto
-        productos_actualizados =
-          if (
-            reservacion.infraccion_detectada == true or
-            reservacion.pago_autorizado == false
-          ) do
-            Ventas.liberar_producto(state.productos, compra_id, reservacion.producto_id)
-          else
-            state.productos
-          end
+        state = Ventas.continuar_con_envios(reservacion, state)
 
-        # Si todo salió bien, enviar producto
-        if (
-          reservacion.infraccion_detectada == false and
-          reservacion.pago_autorizado == true and
-          reservacion.fecha_envio != nil
-        ) do
-          Ventas.enviar_producto(compra_id)
-        end
-
-        state = %{
-          state |
-          productos: productos_actualizados,
-          reservaciones: Ventas.update_in_reservaciones(state.reservaciones, reservacion)
-        }
         {:noreply, state}
 
 
       {:informar_estado_pago, compra_id, pago_autorizado} ->
         reservacion = Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
+        reservacion = if reservacion != nil, do: reservacion, else: Ventas.crear_reservacion(compra_id)
         reservacion = Ventas.registrar_estado_pago(reservacion, pago_autorizado)
 
-        # Si algo salió mal, liberar producto
-        productos_actualizados =
-          if (
-            reservacion.infraccion_detectada == true or
-            reservacion.pago_autorizado == false
-          ) do
-            Ventas.liberar_producto(state.productos, compra_id, reservacion.producto_id)
-          else
-            state.productos
-          end
+        state = Ventas.continuar_con_envios(reservacion, state)
 
-        # Si todo salió bien, enviar producto
-        if (
-          reservacion.infraccion_detectada == false and
-          reservacion.pago_autorizado == true and
-          reservacion.fecha_envio != nil
-        ) do
-          Ventas.enviar_producto(compra_id)
-        end
-
-        state = %{
-          state |
-          productos: productos_actualizados,
-          reservaciones: Ventas.update_in_reservaciones(state.reservaciones, reservacion)
-        }
         {:noreply, state}
 
 
@@ -236,19 +235,8 @@ defmodule Libremarket.Ventas.Server do
         reservacion = Ventas.find_reservacion_by_compra_id(state.reservaciones, compra_id)
         reservacion = Ventas.registrar_fecha_envio(reservacion, fecha_envio)
 
-        # Si todo salió bien, enviar producto
-        if (
-          reservacion.infraccion_detectada == false and
-          reservacion.pago_autorizado == true and
-          reservacion.fecha_envio != nil
-        ) do
-          Ventas.enviar_producto(compra_id)
-        end
+        state = Ventas.continuar_con_envios(reservacion, state)
 
-        state = %{
-          state |
-          reservaciones: Ventas.update_in_reservaciones(state.reservaciones, reservacion)
-        }
         {:noreply, state}
 
 

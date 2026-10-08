@@ -185,10 +185,10 @@ defmodule Middleware do
         # Si el mensaje vino con reloj, es un evento dentro del sistema
         rcv_vector_clock ->
           # VectorClock.print("Reloj antes de recibir mensaje:", state.vector_clock)
-          Message.print("Recibido", %Message{ content: rcv_content, vector_clock: rcv_vector_clock})
+          # Message.print("Recibido", %Message{ content: rcv_content, vector_clock: rcv_vector_clock})
           new_vector_clock = VectorClock.merge(state.vector_clock, rcv_vector_clock)
-          Map.update!(new_vector_clock, state.vector_component, &(&1 + 1))
-          # VectorClock.print("Reloj ajustado después de recibir mensaje:", new_vector_clock)
+          new_vector_clock = Map.update!(new_vector_clock, state.vector_component, &(&1 + 1))
+          # VectorClock.print(new_vector_clock)
           new_vector_clock
 
       end

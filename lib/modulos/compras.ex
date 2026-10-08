@@ -104,7 +104,7 @@ defmodule Libremarket.Compras do
     end)
   end
 
-  def evaluar_si_continuar_con_pagos(compra, cola_mensajes, state) do
+  def continuar_con_pagos(compra, state) do
     # Punto de sincronización
     # Algunos resultados pueden haber llegado previamente
     # Ante la llegada de cualquier mensaje, verifico todo
@@ -121,29 +121,29 @@ defmodule Libremarket.Compras do
         compra.infraccion_detectada ->
           Compras.informar_infraccion(compra)
           compra = Compras.finalizar_compra(compra, false)
-          {compra, state}
+          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
 
         # Este caso no aparece en el diagrama
         not compra.confirmada_por_usuario ->
           Compras.informar_compra_no_confirmada_por_usuario(compra)
           compra = Compras.finalizar_compra(compra, false)
-          {compra, state}
+          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
 
         # Este caso tampoco aparece en el diagrama
         not compra.producto_esta_reservado ->
           Compras.informar_stock_insuficiente(compra)
           compra = Compras.finalizar_compra(compra, false)
-          {compra, state}
+          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
 
         # Si todo se cumplió por fin
         true ->
-          state = Middleware.send_message_server(cola_mensajes, {:autorizar_pago, compra.compra_id}, state)
-          {compra, state}
+          state = Middleware.send_message_server(Constantes.pagos_queue(), {:autorizar_pago, compra.compra_id}, state)
+          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
 
       end
 
     else
-      {compra, state}
+      %{ state | compras: Compras.update_in_compras(state.compras, compra)}
 
     end
 
@@ -249,9 +249,8 @@ defmodule Libremarket.Compras.Server do
         compra = Compras.find_compra_by_id(state.compras, compra_id)
         compra = Compras.registrar_costo_envio(compra, costo_envio)
 
-        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, Constantes.pagos_queue(), state)
+        state = Compras.continuar_con_pagos(compra, state)
 
-        state = %{ state | compras: Compras.update_in_compras(state.compras, compra)}
         {:noreply, state}
 
 
@@ -259,9 +258,8 @@ defmodule Libremarket.Compras.Server do
         compra = Compras.find_compra_by_id(state.compras, compra_id)
         compra = Compras.registrar_estado_infraccion(compra, infraccion_detectada)
 
-        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, Constantes.pagos_queue(), state)
+        state = Compras.continuar_con_pagos(compra, state)
 
-        state = %{ state | compras: Compras.update_in_compras(state.compras, compra)}
         {:noreply, state}
 
 
@@ -269,9 +267,8 @@ defmodule Libremarket.Compras.Server do
         compra = Compras.find_compra_by_id(state.compras, compra_id)
         compra = Compras.registrar_estado_reservacion(compra, producto_esta_reservado)
 
-        {compra, state} = Compras.evaluar_si_continuar_con_pagos(compra, Constantes.pagos_queue(), state)
+        state = Compras.continuar_con_pagos(compra, state)
 
-        state = %{ state | compras: Compras.update_in_compras(state.compras, compra)}
         {:noreply, state}
 
 
@@ -310,12 +307,17 @@ defmodule Libremarket.Compras.Server do
       {:show_count_compras} ->
         totales = length(state.compras)
         exitosos = Estadisticas.contar(state.compras, :finalizado_con_exito, true)
+        fallidos = Estadisticas.contar(state.compras, :finalizado_con_exito, false)
+        errores = Estadisticas.contar(state.compras, :finalizado_con_exito, nil)
+
         IO.puts(
-          "Conteo de compras\n" <>
-          "-----------------\n" <>
-          "Totales................. #{totales}\n" <>
-          "Finalizados con éxito... #{exitosos}\n" <>
-          "No finalizados.......... #{totales - exitosos}\n"
+          "====================================================\n" <>
+          "|        CONTEO DE COMPRAS                         |\n" <>
+          "====================================================\n" <>
+          "#{String.pad_leading(Integer.to_string(totales), 6)}  Totales\n" <>
+          "#{String.pad_leading(Integer.to_string(exitosos), 6)}  Finalizados con éxito\n" <>
+          "#{String.pad_leading(Integer.to_string(fallidos), 6)}  Finalizados sin éxito\n" <>
+          "#{String.pad_leading(Integer.to_string(errores), 6)}  Sin finalizar (posibles errores)\n"
         )
         {:noreply, state}
 
