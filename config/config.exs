@@ -12,3 +12,5 @@ config :amqp,
 
 config :libremarket,
   ecto_repos: [Repositorio]
+
+config :logger, level: :info
