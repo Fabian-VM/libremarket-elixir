@@ -179,7 +179,6 @@ defmodule Libremarket.Compras.Server do
   #   amqp_channel: {...}
   #   compras: Compra[],
   #   secuencia_id: Numero,
-  #   events: [],
   #   vector_component: VectorClock.component
   #   vector_clock: VectorClock
   # }
@@ -193,7 +192,6 @@ defmodule Libremarket.Compras.Server do
       amqp_channel: amqp_channel,
       compras: [],
       secuencia_id: 0,
-      messages: [],
       vector_component: :compras,
       vector_clock: Middleware.VectorClock.new()
     }

@@ -4,6 +4,18 @@ defmodule Simulador do
   # SIMULACIÓN
   # -------------------------------------
 
+  def probar_conexion do
+    result = Repositorio.query!("SELECT NOW()")
+
+    [[hora]] = result.rows
+
+    IO.puts("Conexión exitosa con PostgreSQL.")
+    IO.inspect(hora, label: "Hora del servidor PostgreSQL")
+
+    hora
+  end
+
+
   def simular_compra(producto_id) do
     forma_entrega = if Enum.random(1..100) <= Constantes.prob_forma_entrega_correo(), do: :correo, else: :retira
     medio_pago = Enum.random([:efectivo, :transferencia, :td, :tc])

@@ -10,11 +10,11 @@ services:
       MIX_HOME: /app/mix_home
       HEX_HOME: /app/hex_home
       CLOUDAMQP_URL: ${CLOUDAMQP_URL}
-      DB_HOST: "192.168.56.10"
-      DB_PORT: "5432"
-      DB_USER: "appuser"
-      DB_PASSWORD: "soporte"
-      DB_NAME: "appdb"
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
     command: iex --sname compras --cookie secret -S mix run --no-compile
     stdin_open: true
     tty: true
