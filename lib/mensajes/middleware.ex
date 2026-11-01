@@ -161,13 +161,13 @@ defmodule Middleware do
 
   @spec send_message_server(String.t(), term(), map()) :: map()
   def send_message_server(queue_name, message, state) do
-    # VectorClock.print("Reloj antes de enviar el mensaje:", state.vector_clock)
-    vector_clock = Map.update!(state.vector_clock, state.vector_component, &(&1 + 1))
+    current_clock = Repositorio.VectorClocks.get_clock(state.vector_component)
+    vector_clock = Map.update!(current_clock, state.vector_component, &(&1 + 1))
+    Repositorio.VectorClocks.update_clock(state.vector_component, vector_clock)
     sent_message = %Message{ content: message, vector_clock: vector_clock }
     send_term(queue_name, sent_message)
     Message.print("Enviado a #{queue_name}", sent_message)
-    %{ state | vector_clock: sent_message.vector_clock }
-
+    state
   end
 
   @spec read_message_server(term(), map()) :: { Message.t(), map() }
@@ -180,22 +180,22 @@ defmodule Middleware do
       case rcv_vector_clock do
         # Si el mensaje vino sin reloj, se asume que es un mensaje de simulador
         # y no se debe incrementar, ya que está fuera de la coordinación con relojes
-        nil -> state.vector_clock
+        nil ->
+          Repositorio.VectorClocks.get_clock(state.vector_component)
 
         # Si el mensaje vino con reloj, es un evento dentro del sistema
         rcv_vector_clock ->
-          # VectorClock.print("Reloj antes de recibir mensaje:", state.vector_clock)
-          # Message.print("Recibido", %Message{ content: rcv_content, vector_clock: rcv_vector_clock})
-          new_vector_clock = VectorClock.merge(state.vector_clock, rcv_vector_clock)
+          current_clock = Repositorio.VectorClocks.get_clock(state.vector_component)
+          new_vector_clock = VectorClock.merge(current_clock, rcv_vector_clock)
           new_vector_clock = Map.update!(new_vector_clock, state.vector_component, &(&1 + 1))
-          # VectorClock.print(new_vector_clock)
+          Repositorio.VectorClocks.update_clock(state.vector_component, new_vector_clock)
           new_vector_clock
 
       end
 
     {
       %Message{ content: rcv_content, vector_clock: new_vector_clock },
-      %{ state | vector_clock: new_vector_clock }
+      state
     }
 
   end

@@ -1,4 +1,3 @@
-
 defmodule Libremarket.Envios do
   @moduledoc """
   Módulo de lógica de envios
@@ -8,7 +7,7 @@ defmodule Libremarket.Envios do
   # -------------------------------------
 
   def calcular_costo(compra_id, forma_entrega) do
-    costo_envio = if forma_entrega == :correo, do: 50, else: 0
+    costo_envio = if forma_entrega in [:correo, "correo"], do: 50, else: 0
     IO.puts("Compra N° #{compra_id}: costo de envío de $#{costo_envio} rupias\n")
     costo_envio
   end
@@ -45,7 +44,6 @@ defmodule Libremarket.Envios.Server do
   # state {
   #   amqp_channel: {...},
   #   vector_component: VectorClock.component
-  #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
@@ -55,8 +53,7 @@ defmodule Libremarket.Envios.Server do
 
     initial_state = %{
       amqp_channel: amqp_channel,
-      vector_component: :envios,
-      vector_clock: Middleware.VectorClock.new()
+      vector_component: :envios
     }
 
     {:ok, initial_state}
@@ -91,7 +88,8 @@ defmodule Libremarket.Envios.Server do
         {:noreply, state}
 
       {:show_clock} ->
-        Middleware.VectorClock.print(state.vector_clock)
+        clock = Repositorio.VectorClocks.get_clock(state.vector_component)
+        Middleware.VectorClock.print(clock)
         {:noreply, state}
 
       bad_payload ->

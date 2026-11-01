@@ -1,4 +1,3 @@
-
 defmodule Libremarket.Pagos do
   @moduledoc """
   Módulo de lógica de pagos
@@ -39,7 +38,6 @@ defmodule Libremarket.Pagos.Server do
   # state {
   #   amqp_channel: {...},
   #   vector_component: VectorClock.component
-  #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
@@ -49,8 +47,7 @@ defmodule Libremarket.Pagos.Server do
 
     initial_state = %{
       amqp_channel: amqp_channel,
-      vector_component: :pagos,
-      vector_clock: Middleware.VectorClock.new()
+      vector_component: :pagos
     }
 
     {:ok, initial_state}
@@ -81,7 +78,8 @@ defmodule Libremarket.Pagos.Server do
         {:noreply, state}
 
       {:show_clock} ->
-        Middleware.VectorClock.print(state.vector_clock)
+        clock = Repositorio.VectorClocks.get_clock(state.vector_component)
+        Middleware.VectorClock.print(clock)
         {:noreply, state}
 
       bad_payload ->
@@ -91,7 +89,5 @@ defmodule Libremarket.Pagos.Server do
     end
 
   end
-
-
 
 end

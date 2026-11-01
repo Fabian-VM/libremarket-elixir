@@ -1,4 +1,3 @@
-
 defmodule Libremarket.Compras do
   @moduledoc """
   Módulo de lógica de compras
@@ -11,22 +10,22 @@ defmodule Libremarket.Compras do
 
   def seleccionar_producto(compra, producto_id) do
     IO.puts("Compra N° #{compra.compra_id}: producto ##{producto_id} seleccionado\n")
-    %{ compra | producto_id: producto_id }
+    Repositorio.Compras.seleccionar_producto(compra.compra_id, producto_id)
   end
 
   def seleccionar_forma_entrega(compra, forma_entrega) do
     IO.puts("Compra N° #{compra.compra_id}: forma de entrega '#{forma_entrega}' seleccionada\n")
-    %{ compra | forma_entrega: forma_entrega }
+    Repositorio.Compras.seleccionar_forma_entrega(compra.compra_id, forma_entrega)
   end
 
   def seleccionar_medio_pago(compra, medio_pago) do
     IO.puts("Compra N° #{compra.compra_id}: medio de pago '#{medio_pago}' seleccionado\n")
-    %{ compra | medio_pago: medio_pago }
+    Repositorio.Compras.seleccionar_medio_pago(compra.compra_id, medio_pago)
   end
 
   def confirmar_compra(compra, confirma_compra) do
     IO.puts("Compra N° #{compra.compra_id}: la compra #{if confirma_compra, do: "ha sido", else: "no ha sido"} confirmada por el usuario\n")
-    %{ compra | confirmada_por_usuario: confirma_compra }
+    Repositorio.Compras.confirmar_compra(compra.compra_id, confirma_compra)
   end
 
   def informar_compra_no_confirmada_por_usuario(compra) do
@@ -51,7 +50,7 @@ defmodule Libremarket.Compras do
     else
       IO.puts("Compra N° #{compra.compra_id}: se ha cancelado su compra\n")
     end
-    %{ compra | finalizado_con_exito: finalizado_con_exito }
+    Repositorio.Compras.finalizar_compra(compra.compra_id, finalizado_con_exito)
   end
 
 
@@ -60,48 +59,31 @@ defmodule Libremarket.Compras do
   # UTILIDADES
   # -------------------------------------
 
-  def crear_compra(compra_id) do
-    IO.puts("Compra N° #{compra_id}: nueva compra iniciada\n")
-      %{
-        compra_id: compra_id,
-        producto_id: nil,
-        forma_entrega: nil,
-        medio_pago: nil,
-        costo_envio: nil,
-        confirmada_por_usuario: nil,
-        infraccion_detectada: nil,
-        producto_esta_reservado: nil,
-        pago_autorizado: nil,
-        finalizado_con_exito: nil
-      }
+  def crear_compra do
+    compra = Repositorio.Compras.crear_compra()
+    IO.puts("Compra N° #{compra.compra_id}: nueva compra iniciada\n")
+    compra
   end
 
   def registrar_estado_infraccion(compra, infraccion_detectada) do
-    %{ compra | infraccion_detectada: infraccion_detectada }
+    Repositorio.Compras.registrar_estado_infraccion(compra.compra_id, infraccion_detectada)
   end
 
   def registrar_estado_pago(compra, pago_autorizado) do
-    %{ compra | pago_autorizado: pago_autorizado }
+    Repositorio.Compras.registrar_estado_pago(compra.compra_id, pago_autorizado)
   end
 
   def registrar_estado_reservacion(compra, producto_esta_reservado) do
-    %{ compra | producto_esta_reservado: producto_esta_reservado }
+    Repositorio.Compras.registrar_estado_reservacion(compra.compra_id, producto_esta_reservado)
   end
 
   def registrar_costo_envio(compra, costo_envio) do
-    %{ compra | costo_envio: costo_envio }
+    Repositorio.Compras.registrar_costo_envio(compra.compra_id, costo_envio)
   end
 
-  # Encontrar una compra en una lista de compras
-  def find_compra_by_id(compras, compra_id) do
-    Enum.find(compras, fn item -> item.compra_id == compra_id end)
-  end
-
-  # Recrear la lista de compras pero con la compra actualizada
-  def update_in_compras(compras, new_compra) do
-    Enum.map(compras, fn item ->
-      if item.compra_id == new_compra.compra_id, do: new_compra, else: item
-    end)
+  # Encontrar una compra por su id en la base de datos
+  def find_compra_by_id(compra_id) do
+    Repositorio.Compras.get_compra(compra_id)
   end
 
   def continuar_con_pagos(compra, state) do
@@ -120,31 +102,29 @@ defmodule Libremarket.Compras do
         # Este caso aparece en el diagrama
         compra.infraccion_detectada ->
           Compras.informar_infraccion(compra)
-          compra = Compras.finalizar_compra(compra, false)
-          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
+          Compras.finalizar_compra(compra, false)
+          state
 
         # Este caso no aparece en el diagrama
         not compra.confirmada_por_usuario ->
           Compras.informar_compra_no_confirmada_por_usuario(compra)
-          compra = Compras.finalizar_compra(compra, false)
-          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
+          Compras.finalizar_compra(compra, false)
+          state
 
         # Este caso tampoco aparece en el diagrama
         not compra.producto_esta_reservado ->
           Compras.informar_stock_insuficiente(compra)
-          compra = Compras.finalizar_compra(compra, false)
-          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
+          Compras.finalizar_compra(compra, false)
+          state
 
         # Si todo se cumplió por fin
         true ->
-          state = Middleware.send_message_server(Constantes.pagos_queue(), {:autorizar_pago, compra.compra_id}, state)
-          %{ state | compras: Compras.update_in_compras(state.compras, compra)}
+          Middleware.send_message_server(Constantes.pagos_queue(), {:autorizar_pago, compra.compra_id}, state)
 
       end
 
     else
-      %{ state | compras: Compras.update_in_compras(state.compras, compra)}
-
+      state
     end
 
   end
@@ -177,10 +157,7 @@ defmodule Libremarket.Compras.Server do
 
   # state {
   #   amqp_channel: {...}
-  #   compras: Compra[],
-  #   secuencia_id: Numero,
   #   vector_component: VectorClock.component
-  #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
@@ -190,10 +167,7 @@ defmodule Libremarket.Compras.Server do
 
     initial_state = %{
       amqp_channel: amqp_channel,
-      compras: [],
-      secuencia_id: 0,
-      vector_component: :compras,
-      vector_clock: Middleware.VectorClock.new()
+      vector_component: :compras
     }
 
     {:ok, initial_state}
@@ -219,7 +193,7 @@ defmodule Libremarket.Compras.Server do
 
     case message.content do
       {:simular_compra, producto_id, forma_entrega, medio_pago, confirmada_por_usuario} ->
-        compra = Compras.crear_compra(state.secuencia_id + 1)
+        compra = Compras.crear_compra()
 
         compra = Compras.seleccionar_producto(compra, producto_id)
         compra = Compras.seleccionar_forma_entrega(compra, forma_entrega)
@@ -227,24 +201,27 @@ defmodule Libremarket.Compras.Server do
         state = Middleware.send_message_server(Constantes.infracciones_queue(), {:detectar_infracciones, compra.compra_id}, state)
 
         state =
-          if forma_entrega == :correo do Middleware.send_message_server(Constantes.envios_queue(), {:calcular_costo, compra.compra_id, forma_entrega}, state)
-          else state
+          if forma_entrega in [:correo, "correo"] do
+            Middleware.send_message_server(Constantes.envios_queue(), {:calcular_costo, compra.compra_id, forma_entrega}, state)
+          else
+            state
           end
 
         compra =
-          if forma_entrega == :correo do compra
-          else Compras.registrar_costo_envio(compra, 0)
+          if forma_entrega in [:correo, "correo"] do
+            compra
+          else
+            Compras.registrar_costo_envio(compra, 0)
           end
 
         compra = Compras.seleccionar_medio_pago(compra, medio_pago)
-        compra = Compras.confirmar_compra(compra, confirmada_por_usuario)
+        _compra = Compras.confirmar_compra(compra, confirmada_por_usuario)
 
-        state = %{ state | secuencia_id: compra.compra_id, compras: [ compra | state.compras ]}
         {:noreply, state}
 
 
       {:informar_costo_envio, compra_id, costo_envio} ->
-        compra = Compras.find_compra_by_id(state.compras, compra_id)
+        compra = Compras.find_compra_by_id(compra_id)
         compra = Compras.registrar_costo_envio(compra, costo_envio)
 
         state = Compras.continuar_con_pagos(compra, state)
@@ -253,7 +230,7 @@ defmodule Libremarket.Compras.Server do
 
 
       {:informar_estado_infraccion, compra_id, infraccion_detectada} ->
-        compra = Compras.find_compra_by_id(state.compras, compra_id)
+        compra = Compras.find_compra_by_id(compra_id)
         compra = Compras.registrar_estado_infraccion(compra, infraccion_detectada)
 
         state = Compras.continuar_con_pagos(compra, state)
@@ -262,7 +239,7 @@ defmodule Libremarket.Compras.Server do
 
 
       {:informar_estado_reservacion, compra_id, producto_esta_reservado} ->
-        compra = Compras.find_compra_by_id(state.compras, compra_id)
+        compra = Compras.find_compra_by_id(compra_id)
         compra = Compras.registrar_estado_reservacion(compra, producto_esta_reservado)
 
         state = Compras.continuar_con_pagos(compra, state)
@@ -271,7 +248,7 @@ defmodule Libremarket.Compras.Server do
 
 
       {:informar_estado_pago, compra_id, pago_autorizado} ->
-        compra = Compras.find_compra_by_id(state.compras, compra_id)
+        compra = Compras.find_compra_by_id(compra_id)
         compra = Compras.registrar_estado_pago(compra, pago_autorizado)
 
         state =
@@ -281,7 +258,7 @@ defmodule Libremarket.Compras.Server do
             state
           end
 
-        compra =
+        _compra =
           if not pago_autorizado do
             Compras.informar_pago_rechazado(compra)
             Compras.finalizar_compra(compra, false)
@@ -289,24 +266,22 @@ defmodule Libremarket.Compras.Server do
             Compras.finalizar_compra(compra, true)
           end
 
-        state = %{ state | compras: Compras.update_in_compras(state.compras, compra)}
         {:noreply, state}
 
 
       {:show_state} ->
-        IO.inspect(state)
+        IO.inspect(Repositorio.Compras.all_compras(), label: "Compras en DB")
         {:noreply, state}
 
 
       {:show_clock} ->
-        Middleware.VectorClock.print(state.vector_clock)
+        clock = Repositorio.VectorClocks.get_clock(state.vector_component)
+        Middleware.VectorClock.print(clock)
         {:noreply, state}
 
       {:show_count_compras} ->
-        totales = length(state.compras)
-        exitosos = Estadisticas.contar(state.compras, :finalizado_con_exito, true)
-        fallidos = Estadisticas.contar(state.compras, :finalizado_con_exito, false)
-        errores = Estadisticas.contar(state.compras, :finalizado_con_exito, nil)
+        %{totales: totales, exitosos: exitosos, fallidos: fallidos, errores: errores} =
+          Repositorio.Compras.count_compras()
 
         IO.puts(
           "====================================================\n" <>

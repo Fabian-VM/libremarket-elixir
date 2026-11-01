@@ -1,12 +1,14 @@
-
 defmodule Libremarket.Infracciones do
+  @moduledoc """
+  Módulo de lógica de infracciones
+  """
 
   # OPERACIONES DEL DIAGRAMA
   # -------------------------------------
 
   def detectar_infracciones(compra_id, infraccion_detectada) do
     IO.puts("Compra N° #{compra_id}: #{if infraccion_detectada, do: "se ha detectado una", else: "no se ha detectado ninguna"} infracción\n")
-    %{ compra_id: compra_id, infraccion_detectada: infraccion_detectada }
+    Repositorio.Infracciones.registrar_infraccion(compra_id, infraccion_detectada)
   end
 
   # UTILIDADES
@@ -16,8 +18,8 @@ defmodule Libremarket.Infracciones do
     Enum.random(1..100) <= Constantes.prob_infraccion()
   end
 
-  def find_by_compra_id(infracciones, compra_id) do
-    Enum.find(infracciones, fn item -> item.compra_id == compra_id end)
+  def find_by_compra_id(compra_id) do
+    Repositorio.Infracciones.get_infraccion(compra_id)
   end
 
 end
@@ -45,9 +47,7 @@ defmodule Libremarket.Infracciones.Server do
 
   # state {
   #   amqp_channel: {...}
-  #   infracciones: Infraccion[]
   #   vector_component: VectorClock.component
-  #   vector_clock: VectorClock
   # }
   @impl true
   def init(_state) do
@@ -57,9 +57,7 @@ defmodule Libremarket.Infracciones.Server do
 
     initial_state = %{
       amqp_channel: amqp_channel,
-      infracciones: [],
-      vector_component: :infracciones,
-      vector_clock: Middleware.VectorClock.new()
+      vector_component: :infracciones
     }
 
     {:ok, initial_state}
@@ -81,19 +79,19 @@ defmodule Libremarket.Infracciones.Server do
     case message.content do
       {:detectar_infracciones, compra_id} ->
         estado_infraccion = Infracciones.verificar_infraccion()
-        infraccion = Infracciones.detectar_infracciones(compra_id, estado_infraccion)
-        state = %{ state | infracciones: [ infraccion | state.infracciones ] }
+        _infraccion = Infracciones.detectar_infracciones(compra_id, estado_infraccion)
         state = Middleware.send_message_server(Constantes.compras_queue(), {:informar_estado_infraccion, compra_id, estado_infraccion}, state)
         state = Middleware.send_message_server(Constantes.ventas_queue(), {:informar_estado_infraccion, compra_id, estado_infraccion}, state)
         {:noreply, state}
 
 
       {:show_state} ->
-        IO.inspect(state)
+        IO.inspect(Repositorio.Infracciones.all_infracciones(), label: "Infracciones en DB")
         {:noreply, state}
 
       {:show_clock} ->
-        Middleware.VectorClock.print(state.vector_clock)
+        clock = Repositorio.VectorClocks.get_clock(state.vector_component)
+        Middleware.VectorClock.print(clock)
         {:noreply, state}
 
       bad_payload ->
