@@ -9,3 +9,6 @@ config :amqp,
   channels: [
     channel: [connection: :connection]
   ]
+
+config :repo,
+  ecto_repos: [Repositorio]
