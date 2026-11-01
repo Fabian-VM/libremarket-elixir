@@ -17,7 +17,7 @@ defmodule Libremarket.Supervisor do
 
   @impl true
   def init(_opts) do
-    children = [ Libremarket.Repo | children() ]
+    children = [ Repositorio | children() ]
     Supervisor.init(children, strategy: :one_for_one)
   end
 end

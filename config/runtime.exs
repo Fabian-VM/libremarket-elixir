@@ -1,6 +1,6 @@
 import Config
 
-config :repo, Repositorio,
+config :libremarket, Repositorio,
   username: System.fetch_env!("DB_USER"),
   password: System.fetch_env!("DB_PASSWORD"),
   hostname: System.fetch_env!("DB_HOST"),

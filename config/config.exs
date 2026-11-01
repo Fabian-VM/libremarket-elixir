@@ -10,5 +10,5 @@ config :amqp,
     channel: [connection: :connection]
   ]
 
-config :repo,
+config :libremarket,
   ecto_repos: [Repositorio]
