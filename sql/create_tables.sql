@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS vector_clock_compras (
     vc_envios BIGINT NOT NULL,
     vc_pagos BIGINT NOT NULL
 );
-INSERT INTO vector_clock_compras (vc_compras, vc_infracciones, vc_ventas, vc_envios, vc_pagos) VALUES (0, 0, 0, 0, 0);
 
 
 
@@ -41,7 +40,6 @@ CREATE TABLE IF NOT EXISTS vector_clock_infracciones (
     vc_envios BIGINT NOT NULL,
     vc_pagos BIGINT NOT NULL
 );
-INSERT INTO vector_clock_infracciones (vc_compras, vc_infracciones, vc_ventas, vc_envios, vc_pagos) VALUES (0, 0, 0, 0, 0);
 
 
 
@@ -60,8 +58,6 @@ CREATE TABLE IF NOT EXISTS productos (
     producto_id BIGINT PRIMARY KEY,
     stock INTEGER NOT NULL
 );
-INSERT INTO productos (producto_id, stock)
-VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10);
 
 CREATE TABLE IF NOT EXISTS vector_clock_ventas (
     unica_fila BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (unica_fila),
@@ -71,7 +67,6 @@ CREATE TABLE IF NOT EXISTS vector_clock_ventas (
     vc_envios BIGINT NOT NULL,
     vc_pagos BIGINT NOT NULL
 );
-INSERT INTO vector_clock_ventas (vc_compras, vc_infracciones, vc_ventas, vc_envios, vc_pagos) VALUES (0, 0, 0, 0, 0);
 
 
 -- ENVIOS
@@ -83,7 +78,6 @@ CREATE TABLE IF NOT EXISTS vector_clock_envios (
     vc_envios BIGINT NOT NULL,
     vc_pagos BIGINT NOT NULL
 );
-INSERT INTO vector_clock_envios (vc_compras, vc_infracciones, vc_ventas, vc_envios, vc_pagos) VALUES (0, 0, 0, 0, 0);
 
 -- PAGOS
 CREATE TABLE IF NOT EXISTS vector_clock_pagos (
@@ -94,7 +88,6 @@ CREATE TABLE IF NOT EXISTS vector_clock_pagos (
     vc_envios BIGINT NOT NULL,
     vc_pagos BIGINT NOT NULL
 );
-INSERT INTO vector_clock_pagos (vc_compras, vc_infracciones, vc_ventas, vc_envios, vc_pagos) VALUES (0, 0, 0, 0, 0);
 
 
 
