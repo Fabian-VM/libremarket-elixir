@@ -443,7 +443,7 @@ echo "¡Panel desplegado correctamente!"
 
 # 13. Promoción automática
 
-**Nodo 1**
+**Nodo 1 - ETCD**
 Instalar etcd
 sudo apt install etcd-server etcd-client
 
@@ -470,7 +470,7 @@ sudo ufw allow from 192.168.56.11 to any port 2379 proto tcp
 sudo ufw allow from 192.168.56.12 to any port 2379 proto tcp
 
 
-**Nodo 2 y 3**
+**Nodo 2 y 3 - Patroni**
 Verificar con netcat que se puede conectar al nodo 1
 nc -vz -w 3 192.168.56.10 2379
 
@@ -642,6 +642,28 @@ host    all    patroni_admin    192.168.56.10/32    scram-sha-256
 
 Verificar desde ambos nodos que se aplique (esto deberia devolver "t")
 sudo -u postgres psql -c "SELECT pg_reload_conf();"
+
+**Nodo 1 - HAProxy**
+
+Modificar la configuración de proxy para eliminar la redirección de consultas sql al nodo 2, y hacerlo dinámico. El proxy consultaría el endpoint de patroni que indica si el nodo es el primario, asi puede mandar las consultas por ahí
+sudo nano /etc/haproxy/haproxy.cfg
+```
+# Lab4
+frontend postgres_front
+    bind *:5432
+    mode tcp
+    option tcplog
+    default_backend postgres_back
+
+backend postgres_back
+   mode tcp
+   option httpchk GET /primary
+   http-check expect status 200
+
+   server node2 192.168.56.11:5432 check port 8008 inter 2s fall 3 rise 2
+   server node3 192.168.56.12:5432 check port 8008 inter 2s fall 3 rise 2
+
+```
 
 **Prueba de switchover (manual)**
 Ahora viene lo peligroso, hay que transferirle a proposito el liderazgo al nodo 3
